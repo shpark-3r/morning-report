@@ -7,6 +7,7 @@ from flask import Flask, render_template, jsonify
 from market_data import fetch_market_data, get_kospi_analysis
 from news_fetcher import fetch_all_news, filter_market_news
 from youtube_search import fetch_youtube_videos, get_youtube_search_urls
+from config import TRADINGVIEW_SYMBOLS
 
 app = Flask(__name__)
 
@@ -42,6 +43,7 @@ def collect_all_data() -> dict:
         "market_news": market_news[:5],
         "videos": videos,
         "youtube_fallback": youtube_fallback,
+        "tv_symbols": TRADINGVIEW_SYMBOLS,
     }
 
 

@@ -240,6 +240,83 @@
             margin-top: 16px;
         }
 
+        /* 차트 모달 */
+        .chart-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .chart-modal.active { display: flex; }
+        .chart-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 1000px;
+            overflow: hidden;
+            position: relative;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .chart-header h3 { font-size: 1.1rem; }
+        .chart-close {
+            background: none;
+            border: none;
+            color: var(--dim);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .chart-close:hover { color: var(--text); }
+        .chart-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .chart-tab {
+            padding: 6px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--dim);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .chart-tab.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .chart-tab:hover:not(.active) {
+            background: var(--border);
+            color: var(--text);
+        }
+        .chart-body {
+            height: 500px;
+        }
+        @media (max-width: 768px) {
+            .chart-body { height: 350px; }
+        }
+        .market-table tr { cursor: pointer; transition: background 0.15s; }
+        .market-table tr:hover { background: rgba(96,165,250,0.08); }
+        .market-table .ticker-name::after {
+            content: " >";
+            color: var(--dim);
+            font-size: 0.8rem;
+        }
+
         /* 로딩 */
         .loading-overlay {
             display: none;
@@ -306,7 +383,7 @@
                 </thead>
                 <tbody>
                     {% for name, info in market_data.items() %}
-                    <tr>
+                    <tr onclick="openChart('{{ name }}', '{{ tv_symbols.get(name, '') }}')" title="클릭하여 차트 보기">
                         <td class="ticker-name">{{ name }}</td>
                         {% if info.get('error') %}
                         <td colspan="5" style="color: var(--dim);">{{ info['error'] }}</td>
@@ -392,11 +469,95 @@
             {% endif %}
         </div>
 
+        <!-- 차트 모달 -->
+        <div class="chart-modal" id="chartModal" onclick="if(event.target===this)closeChart()">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3 id="chartTitle">-</h3>
+                    <button class="chart-close" onclick="closeChart()">&times;</button>
+                </div>
+                <div class="chart-tabs">
+                    <button class="chart-tab active" data-interval="1" onclick="switchInterval(this, '1')">1분봉</button>
+                    <button class="chart-tab" data-interval="5" onclick="switchInterval(this, '5')">5분봉</button>
+                    <button class="chart-tab" data-interval="15" onclick="switchInterval(this, '15')">15분봉</button>
+                    <button class="chart-tab" data-interval="60" onclick="switchInterval(this, '60')">시봉</button>
+                    <button class="chart-tab" data-interval="D" onclick="switchInterval(this, 'D')">일봉</button>
+                    <button class="chart-tab" data-interval="W" onclick="switchInterval(this, 'W')">주봉</button>
+                </div>
+                <div class="chart-body" id="chartBody"></div>
+            </div>
+        </div>
+
         <!-- 푸터 -->
         <div class="footer">
             본 리포트는 자동 수집된 데이터 기반이며 투자 조언이 아닙니다.<br>
             투자 판단은 본인의 책임하에 이루어져야 합니다.
         </div>
     </div>
+
+    <script>
+        let currentSymbol = '';
+        let currentInterval = '1';
+
+        function openChart(name, tvSymbol) {
+            if (!tvSymbol) return;
+            currentSymbol = tvSymbol;
+            currentInterval = '1';
+            document.getElementById('chartTitle').textContent = name + ' 차트';
+            document.getElementById('chartModal').classList.add('active');
+            // 탭 초기화
+            document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.chart-tab[data-interval="1"]').classList.add('active');
+            loadChart(tvSymbol, '1');
+        }
+
+        function closeChart() {
+            document.getElementById('chartModal').classList.remove('active');
+            document.getElementById('chartBody').innerHTML = '';
+        }
+
+        function switchInterval(btn, interval) {
+            currentInterval = interval;
+            document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            loadChart(currentSymbol, interval);
+        }
+
+        function loadChart(symbol, interval) {
+            const container = document.getElementById('chartBody');
+            container.innerHTML = '';
+            const widget = document.createElement('div');
+            widget.id = 'tv-widget';
+            widget.style.height = '100%';
+            container.appendChild(widget);
+
+            const script = document.createElement('script');
+            script.src = 'https://s3.tradingview.com/tv.js';
+            script.onload = function() {
+                new TradingView.widget({
+                    container_id: 'tv-widget',
+                    autosize: true,
+                    symbol: symbol,
+                    interval: interval,
+                    timezone: 'Asia/Seoul',
+                    theme: 'dark',
+                    style: '1',
+                    locale: 'kr',
+                    toolbar_bg: '#1a1d28',
+                    enable_publishing: false,
+                    hide_top_toolbar: false,
+                    hide_legend: false,
+                    save_image: false,
+                    studies: ['MASimple@tv-basicstudies'],
+                });
+            };
+            document.head.appendChild(script);
+        }
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeChart();
+        });
+    </script>
 </body>
 </html>
