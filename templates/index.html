@@ -396,8 +396,8 @@
                         <td class="{{ cls }}">
                             {{ "{:+.2f}".format(info['change_pct']) }}%
                         </td>
-                        <td>{{ "{:,.2f}".format(info['high_5d']) }}</td>
-                        <td>{{ "{:,.2f}".format(info['low_5d']) }}</td>
+                        <td>{% if info['high_5d'] %}{{ "{:,.2f}".format(info['high_5d']) }}{% else %}-{% endif %}</td>
+                        <td>{% if info['low_5d'] %}{{ "{:,.2f}".format(info['low_5d']) }}{% else %}-{% endif %}</td>
                         {% endif %}
                     </tr>
                     {% endfor %}
