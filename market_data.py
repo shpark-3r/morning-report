@@ -12,37 +12,52 @@ def fetch_market_data() -> dict[str, dict]:
     for name, ticker_symbol in TICKERS.items():
         try:
             ticker = yf.Ticker(ticker_symbol)
-            # 최근 5일 데이터
-            hist = ticker.history(period="5d")
+            info = ticker.info
 
-            if hist.empty or len(hist) < 1:
-                results[name] = {"error": "데이터 없음"}
-                continue
+            # ticker.info에서 실시간 데이터 우선 사용
+            current_price = info.get("regularMarketPrice")
+            prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
 
-            latest = hist.iloc[-1]
-            current_price = latest["Close"]
-
-            # 전일 대비 변동
-            if len(hist) >= 2:
-                prev_price = hist.iloc[-2]["Close"]
-                change = current_price - prev_price
-                change_pct = (change / prev_price) * 100
+            if current_price and prev_close:
+                change = current_price - prev_close
+                change_pct = (change / prev_close) * 100
+            elif info.get("regularMarketChange") is not None:
+                change = info["regularMarketChange"]
+                change_pct = info.get("regularMarketChangePercent", 0)
             else:
-                change = 0
-                change_pct = 0
+                # info 실패 시 history fallback
+                hist = ticker.history(period="1mo")
+                if hist.empty:
+                    results[name] = {"error": "데이터 없음"}
+                    continue
+                current_price = hist.iloc[-1]["Close"]
+                if len(hist) >= 2:
+                    prev_close = hist.iloc[-2]["Close"]
+                    change = current_price - prev_close
+                    change_pct = (change / prev_close) * 100
+                else:
+                    change = 0
+                    change_pct = 0
 
-            # 5일 고/저
-            high_5d = hist["High"].max()
-            low_5d = hist["Low"].min()
+            # 5일 고/저 (1mo로 넉넉히 가져와서 최근 5거래일 슬라이스)
+            hist = ticker.history(period="1mo")
+            if not hist.empty:
+                recent = hist.tail(5)
+                high_5d = recent["High"].max()
+                low_5d = recent["Low"].min()
+            else:
+                high_5d = current_price
+                low_5d = current_price
 
             results[name] = {
                 "price": current_price,
+                "prev_close": prev_close,
                 "change": change,
                 "change_pct": change_pct,
                 "high_5d": high_5d,
                 "low_5d": low_5d,
-                "volume": latest.get("Volume", 0),
-                "date": hist.index[-1].strftime("%Y-%m-%d"),
+                "volume": info.get("regularMarketVolume", 0),
+                "date": datetime.now().strftime("%Y-%m-%d"),
             }
         except Exception as e:
             results[name] = {"error": str(e)}
