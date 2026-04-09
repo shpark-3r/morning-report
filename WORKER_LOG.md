@@ -70,3 +70,32 @@
 4. Q-3 (Claude judgment loop) — GRND 차트 스냅 5분봉 4개로 Claude에게 "진입 GO/SKIP + 청산 시점" 물어보는 실험 시작
 5. git commit + push (이 entry 포함)
 
+---
+
+## 2026-04-10 00:50 (researcher: claude-opus-4-6, 다른 PC)
+
+### 워커 답변에 대한 평가
+- ⭐ Q-6 검증 결과 매우 가치 있음. 우리 4/9 신호 정의가 24시간만에 라이브 +15.42% 실증.
+- ⭐ Q-1 (자정 대장코인) 첫 데이터 포인트로 강력 지지.
+- ⭐ Q-2 슬리피지 1.07% 실측 — EV 가정 재검토 필요.
+- ⚠️ BOB 케이스 (live_pump_scanner ↔ midnight_bot 갭) 발견 — 매우 중요.
+- ⚠️⚠️⚠️ realtime_scanner v2.2 -262K 손실 — 즉시 폐기 필요.
+
+### 새 가설 push (Q-9 ~ Q-13)
+- **Q-9** 🔴🔴🔴: realtime_scanner v2.2 즉시 폐기 (모든 작업 우선)
+- **Q-10** 🔴🔴: live_pump_scanner ↔ midnight_bot hook (BOB 못 잡은 갭)
+- **Q-11** 🟡: GRND TRAIL 1.2% 너무 빠른가? 30분 후 캔들 확인
+- **Q-12** 🟡: 단발 폭발 vs 다단 펌프 분류 + 다른 출구 전략
+- **Q-13** 🔴: 슬리피지 표본 확장 (daily_results 필수 필드)
+
+### 사용자에게 강조한 것
+- **잔고 시계열**: 740K → 968K (+228K) → 706K (-262K) → 725K (+19K)
+- realtime_scanner v2.2가 -262K 손실 주범 — 즉시 멈춰야 함
+- midnight_bot은 검증된 +EV, 유지
+
+### 다음 워커 작업 권고 우선순위
+1. **즉시**: realtime_scanner v2.2 PID 종료 + archive (Q-9)
+2. **오늘 안**: live_pump_scanner ↔ midnight_bot hook 구현 (Q-10)
+3. **매 trade**: slippage 필드 기록 시작 (Q-13)
+4. **이후**: Q-11, Q-12, Q-3
+

@@ -243,6 +243,114 @@
 
 ---
 
+## 🔴🔴🔴 Q-9: realtime_scanner.py v2.2 즉시 폐기 (4/10 00:45 연구원 응답)
+
+**워커 발견**: realtime_scanner.py v2.2가 4/9 16:39 이후 잔고 **968K → 706K (-27%, -262K 손실)**의 주범. 4/9 15:26 XTER auto-buy 같은 후행 지표 + 고점 매수 + 익절 실패 패턴.
+
+**연구원 권고**:
+1. **즉시 PID 종료** (해당 프로세스 kill)
+2. **코드 폐기**: realtime_scanner.py v2.2 archive/ 또는 deprecated/ 폴더로 이동
+3. **사용자 알림**: 잔고 시계열 (740k → 968k → 706k → 725k) 명시. 사용자가 -262k 손실 인지하지 못하면 같은 봇 다시 켜질 위험.
+4. **유일하게 살릴 봇**: midnight_bot.py (proactive immediate burst trigger, 검증된 EV)
+
+**Why**: 손실 회복 spiral 방지. realtime_scanner v2.2는 알고리즘 자체가 후행 지표 → 고점 매수 → 손절 못함의 사용자 600만 손실 패턴과 동일.
+
+**우선순위**: 🔴🔴🔴 즉시 (모든 다른 작업보다 우선)
+
+### 워커 답
+- 
+
+---
+
+## 🔴🔴 Q-10: live_pump_scanner ↔ midnight_bot 통합 hook (BOB 케이스)
+
+**워커 발견**: 4/10 00:01:09 BOB가 vol_x **293x** (오늘 최강) 신호였으나 midnight_bot watchlist에 없어서 매매 못함. live_pump_scanner는 잡았지만 신호 → 실매매 hook 없음.
+
+**가설**: 모든 신호를 잡으려면 live_pump_scanner의 신호를 midnight_bot가 실시간으로 받아 매매해야 함.
+
+**검증/구현 방법**:
+1. live_pump_scanner.py에서 신호 발생 시 `live_signals_YYYY-MM-DD.jsonl` 추가
+2. midnight_bot.py에 file watcher 추가 → 새 line 발견 시 즉시 매매
+3. 또는 unix socket / pipe로 실시간 전달
+4. 단, **strict 신호 기준만** (vol≥30x + tv≥100M 같은 strong filter) — 아무 신호 다 따라가면 안 됨
+5. **watchlist 제한 없이** — 451 코인 모두 대상
+
+**위험**:
+- BOB 30분 다단 펌프와 GRND 118초 단발은 다른 패턴 — 같은 출구 전략 부적합 가능
+- 동시 다중 진입 시 자본 분배 / 슬리피지 증가
+- 신호 발생 후 1초 내 매매해야 BOB 같은 케이스 잡음
+
+**우선순위**: 🔴🔴 high (오늘 BOB 놓침. 내일도 같은 갭 발생 위험)
+
+### 워커 답
+- 
+
+---
+
+## 🟡 Q-11: GRND 30분 후 캔들 — TRAIL drop 1.2% 너무 빠른가?
+
+**관찰**: GRND 진입 26.53 → peak 31.00 (+16.85%) → TRAIL 청산 30.62 (+15.42%). peak 대비 1.43%p 손실.
+
+**가설**: TRAIL drop 1.2%는 너무 빠른 청산일 수 있음. 30분~1시간 더 보유했으면 더 큰 winner였을 수도.
+
+**검증**:
+1. GRND 4/10 00:02 ~ 01:00 1m 캔들 다시 받기
+2. 만약 TRAIL 청산 후 30.62 → 더 위로 갔다면 → drop 임계 1.5~2%로 완화 시도
+3. 또는 단발 폭발 (GRND처럼)은 1.2% 적정, 다단 펌프 (BOB처럼)는 더 wide
+
+**우선순위**: 🟡 mid
+
+### 워커 답
+- 
+
+---
+
+## 🟡 Q-12: 단발 폭발 (GRND 118초) vs 다단 펌프 (BOB 30분) 패턴 분류
+
+**가설**: 두 펌프 패턴은 다른 출구 전략을 요구.
+- 단발 (118초 +16.85% peak): trail tight (1.2%), 빠른 청산
+- 다단 (30분 +15.4% peak with multiple ups/downs): trail wide (3~5%), 더 긴 hold
+
+**검증 방법**:
+1. 우리 데이터의 winner 18건을 두 패턴으로 분류
+2. 각 패턴에 단일 stage vs 분기 stage 적용 EV 비교
+3. 신호 시점에서 어느 패턴인지 사전 구분 가능한가?
+   - vol_x가 매우 큼 (200x+) → 단발 가능성 높음?
+   - tv가 큼 (100M+) → 다단 가능성?
+
+**우선순위**: 🟡 mid
+
+### 워커 답
+- 
+
+---
+
+## 🔴 Q-13: 슬리피지 표본 확장 — daily_results 필수 필드
+
+**Q-2 실측 n=1** (GRND +1.07%). 일반화 불가. 매 trade마다 측정 필요.
+
+**구현**:
+1. midnight_bot.py + 모든 매매 로직에 다음 필드 필수:
+```json
+{
+  "signal_price": 26.25,
+  "fill_price": 26.53,
+  "slippage_buy_pct": 1.07,
+  "exit_signal_price": 30.85,
+  "exit_fill_price": 30.62,
+  "slippage_sell_pct": -0.75
+}
+```
+2. daily_results/YYYY-MM-DD.json 매 trade에 이 필드 강제
+3. 7일치 데이터 모이면 슬리피지 분포 (p25/p50/p75) 측정 → 시뮬 가정 업데이트
+
+**우선순위**: 🔴 high
+
+### 워커 답
+- 
+
+---
+
 ## 🟡 Q-8: 핸드오프 안정성 개선 (4/10 00:15 사용자 메모)
 
 **문제**: 워커 클로드 세션이 자주 자동 종료됨 (컨텍스트 한계 추정).
