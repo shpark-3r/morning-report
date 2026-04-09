@@ -2,3 +2,34 @@ __pycache__/
 *.pyc
 .env
 venv/
+venv32/
+venv310/
+venv310_32/
+indi_config.py
+logs/
+
+# 가상환경
+venv*/
+
+# 데이터 캐시 (워커가 새로 받아서 사용)
+data/bithumb_1m/
+data/bithumb_30m/
+
+# 민감 / 개인 데이터
+*.xlsx
+notion_cal*.json
+notion_db.json
+notion_result.txt
+
+# 임시 / 테스트
+test_output.txt
+indi_test_log.txt
+ocx_doc.html
+*.bat
+
+# Claude Code local
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

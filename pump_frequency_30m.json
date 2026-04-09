@@ -1,0 +1,53 @@
+{
+  "interval": "30m",
+  "n_coins": 451,
+  "total_days": 63.833333333333336,
+  "time_range": [
+    "2026-02-05T01:30:00+09:00",
+    "2026-04-09T21:30:00+09:00"
+  ],
+  "counts": {
+    "window=16_thr=30": 7707,
+    "window=8_thr=30": 3527,
+    "window=4_thr=30": 1571,
+    "window=2_thr=30": 670,
+    "window=1_thr=30": 290,
+    "window=16_thr=50": 2508,
+    "window=16_thr=80": 820,
+    "window=16_thr=100": 461,
+    "window=8_thr=50": 1104,
+    "window=8_thr=80": 338,
+    "window=8_thr=100": 191,
+    "window=4_thr=50": 472,
+    "window=2_thr=50": 200,
+    "window=4_thr=80": 143,
+    "window=4_thr=100": 84,
+    "window=1_thr=50": 78,
+    "window=2_thr=80": 56,
+    "window=1_thr=80": 25,
+    "window=2_thr=100": 38,
+    "window=1_thr=100": 16
+  },
+  "per_day": {
+    "window=16_thr=30": 120.74,
+    "window=8_thr=30": 55.25,
+    "window=4_thr=30": 24.61,
+    "window=2_thr=30": 10.5,
+    "window=1_thr=30": 4.54,
+    "window=16_thr=50": 39.29,
+    "window=16_thr=80": 12.85,
+    "window=16_thr=100": 7.22,
+    "window=8_thr=50": 17.3,
+    "window=8_thr=80": 5.3,
+    "window=8_thr=100": 2.99,
+    "window=4_thr=50": 7.39,
+    "window=2_thr=50": 3.13,
+    "window=4_thr=80": 2.24,
+    "window=4_thr=100": 1.32,
+    "window=1_thr=50": 1.22,
+    "window=2_thr=80": 0.88,
+    "window=1_thr=80": 0.39,
+    "window=2_thr=100": 0.6,
+    "window=1_thr=100": 0.25
+  }
+}

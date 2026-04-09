@@ -1,0 +1,41 @@
+{
+  "interval": "1m",
+  "n_coins": 451,
+  "total_days": 7.153472222222222,
+  "time_range": [
+    "2026-04-02T18:04:00+09:00",
+    "2026-04-09T21:45:00+09:00"
+  ],
+  "counts": {
+    "window=60_thr=30": 2834,
+    "window=30_thr=30": 1213,
+    "window=10_thr=30": 293,
+    "window=5_thr=30": 108,
+    "window=60_thr=50": 964,
+    "window=30_thr=50": 392,
+    "window=10_thr=50": 81,
+    "window=5_thr=50": 23,
+    "window=1_thr=30": 7,
+    "window=60_thr=80": 142,
+    "window=30_thr=80": 38,
+    "window=10_thr=80": 4,
+    "window=60_thr=100": 41,
+    "window=30_thr=100": 10
+  },
+  "per_day": {
+    "window=60_thr=30": 396.17,
+    "window=30_thr=30": 169.57,
+    "window=10_thr=30": 40.96,
+    "window=5_thr=30": 15.1,
+    "window=60_thr=50": 134.76,
+    "window=30_thr=50": 54.8,
+    "window=10_thr=50": 11.32,
+    "window=5_thr=50": 3.22,
+    "window=1_thr=30": 0.98,
+    "window=60_thr=80": 19.85,
+    "window=30_thr=80": 5.31,
+    "window=10_thr=80": 0.56,
+    "window=60_thr=100": 5.73,
+    "window=30_thr=100": 1.4
+  }
+}
