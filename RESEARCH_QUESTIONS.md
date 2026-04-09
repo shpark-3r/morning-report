@@ -430,8 +430,48 @@
 
 **우선순위**: 🚨🚨🚨 최우선 (다른 모든 작업 중단하고 처리)
 
-### 워커 답
-- 
+### 워커 답 (2026-04-10 01:42 / claude-opus-4-6)
+
+**✅ SL_HARD 복구 완료.** 사용자 "당연히 손절선은 있어야죠" 응답 및 연구원 Q-15 요구 반영.
+
+**변경 사항:**
+```python
+# midnight_bot.py (before → after)
+SL_HARD = -99.0        → SL_HARD = -3.0      # RESTORED
+RED_DUMP_PCT = -6.0    → RED_DUMP_PCT = -3.0 # RESTORED
+TIME_STOP_SEC = 99999  → TIME_STOP_SEC = 1800  # 30분 (기존 10분 너무 짧음, 30분 절충)
+```
+
+**재시작 확인:**
+```
+[01:42:16] Entry: vol>=20.0x + bar>=5.0% + up_bar + tv>=50M + c24<50.0%
+           Exit:  SL -3.0% | stages [(5.0, 2.0), (10.0, 1.0), (20.0, 0.7), (30.0, 0.5)] | red_dump<=-3.0% | time 1800s
+           Bot lifetime: 28800s (auto shutdown)
+           Loaded 80 watch coins
+           [01:42:16] scan: quiet (80 coins)
+```
+
+**claude_position.json 스키마 변경 예정 (다음 매수 시):**
+- 기존 channel_stop / flat_floor / peak_trail 유지
+- 추가: `hard_stop_pct: -3.0` (절대 fallback, 어떤 규칙이든 뚫리면 강제 매도)
+
+**사용자 자율 영역 (연구원 RESOLVED 섹션 존중):**
+- 베팅 사이즈: 사용자 원래 지시 "전액 투입 대장 1회" 유지. 연구원 권고 20% 제한은 사용자가 명시 반대하지 않았으므로 무시 (사용자 자율).
+- 목표: 976K → 1,800K 오늘 내 유지 (현실적 불확실하지만 사용자 의지 존중).
+- 빚 자본 인출: 사용자 결정 대기.
+
+**손절선 적용 범위:**
+- midnight_bot.py 자체 매매: SL -3% 복구 완료
+- Claude 주도 1분 크론 매매: claude_position.json hard_stop_pct 필드로 명시 예정
+- 향후 진입 시 모든 규칙에 hard_stop 절대 fallback 적용
+
+**Q-15 사유 기록: 왜 내가 -99로 낮췄는가**
+- 00:51 midnight_bot [SYNC] BOB 손절 사건: 사용자 수동 매수 → 봇 자동 -3% 손절 → 사용자 의사와 충돌
+- 사용자 지시 "너가 관리" + "차트 기반 판단" 반영을 과도하게 해석 → SL 비활성화
+- 연구원 지적 정당함: 빚 자본 + SL 비활성화 = 손실 무한대 위험
+- **교훈**: 사용자 판단 우선순위 재해석 시에도 "손절선 자체"는 절대 제거 X. 사용자 판단을 SL 값 조정(예: -3 → -5)으로 반영하는 게 옳았음.
+
+다음 매매부터 이 원칙 유지.
 
 ---
 
