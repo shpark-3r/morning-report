@@ -32,7 +32,7 @@
     "slippage_buy_pct": 1.07,
     "slippage_note": "시그널가 26.25 vs 체결 avg 26.53 = +1.07%. 매수 슬리피지 실측 1건 (Q-2)",
     "hold_duration_sec": 118,
-    "peak_price": 31.00,
+    "peak_price": 31.0,
     "peak_pnl_pct": 16.85,
     "exit_time_kst": "2026-04-10T00:02:41+09:00",
     "exit_price": 30.62,
@@ -71,14 +71,70 @@
   "bob_post_signal_tracking": {
     "note": "Q-7 핵심 미실현 기회 — live_pump_scanner가 잡았지만 midnight_bot은 매매 안 함",
     "1m_candles": [
-      {"t": "23:58", "O": 10.42, "H": 10.42, "L": 10.39, "C": 10.42, "vol_M": 0.2},
-      {"t": "00:00", "O": 10.42, "H": 11.23, "L": 10.42, "C": 11.10, "vol_M": 142.1},
-      {"t": "00:01", "O": 11.09, "H": 11.58, "L": 11.02, "C": 11.24, "vol_M": 134.9},
-      {"t": "00:03", "O": 11.27, "H": 11.71, "L": 10.77, "C": 10.89, "vol_M": 123.9},
-      {"t": "00:07", "O": 10.95, "H": 11.68, "L": 10.95, "C": 11.55, "vol_M": 105.5},
-      {"t": "00:08", "O": 11.53, "H": 11.75, "L": 11.20, "C": 11.52, "vol_M": 172.8},
-      {"t": "00:20", "O": 11.08, "H": 11.53, "L": 11.07, "C": 11.43, "vol_M": 66.7},
-      {"t": "00:27", "O": 11.59, "H": 12.02, "L": 11.52, "C": 11.69, "vol_M": 163.3}
+      {
+        "t": "23:58",
+        "O": 10.42,
+        "H": 10.42,
+        "L": 10.39,
+        "C": 10.42,
+        "vol_M": 0.2
+      },
+      {
+        "t": "00:00",
+        "O": 10.42,
+        "H": 11.23,
+        "L": 10.42,
+        "C": 11.1,
+        "vol_M": 142.1
+      },
+      {
+        "t": "00:01",
+        "O": 11.09,
+        "H": 11.58,
+        "L": 11.02,
+        "C": 11.24,
+        "vol_M": 134.9
+      },
+      {
+        "t": "00:03",
+        "O": 11.27,
+        "H": 11.71,
+        "L": 10.77,
+        "C": 10.89,
+        "vol_M": 123.9
+      },
+      {
+        "t": "00:07",
+        "O": 10.95,
+        "H": 11.68,
+        "L": 10.95,
+        "C": 11.55,
+        "vol_M": 105.5
+      },
+      {
+        "t": "00:08",
+        "O": 11.53,
+        "H": 11.75,
+        "L": 11.2,
+        "C": 11.52,
+        "vol_M": 172.8
+      },
+      {
+        "t": "00:20",
+        "O": 11.08,
+        "H": 11.53,
+        "L": 11.07,
+        "C": 11.43,
+        "vol_M": 66.7
+      },
+      {
+        "t": "00:27",
+        "O": 11.59,
+        "H": 12.02,
+        "L": 11.52,
+        "C": 11.69,
+        "vol_M": 163.3
+      }
     ],
     "pattern": "30분 4단 다단 펌프 (사용자가 말한 '장시간 축적' 패턴)",
     "peak_from_signal_price": "11.11 → 12.02 = +8.2% peak (00:27)",
@@ -86,8 +142,23 @@
     "adaptive_trailing_hypothetical": "BOB는 30분간 지속되어 TRAIL stop이 훨씬 후반에 발동됐을 것 — EV 측정은 Q-3 시뮬 필요"
   },
   "signal_comparison_bob_vs_grnd": {
-    "bob": {"vol_x": 293.03, "gain": 6.62, "tv_M": 134, "pattern": "30min 다단", "peak": 15.4, "traded": false},
-    "grnd": {"vol_x": 82.1,  "gain": 5.9,  "tv_M": 67,  "pattern": "118sec 단발", "peak": 16.85, "traded": true, "realized": 15.42}
+    "bob": {
+      "vol_x": 293.03,
+      "gain": 6.62,
+      "tv_M": 134,
+      "pattern": "30min 다단",
+      "peak": 15.4,
+      "traded": false
+    },
+    "grnd": {
+      "vol_x": 82.1,
+      "gain": 5.9,
+      "tv_M": 67,
+      "pattern": "118sec 단발",
+      "peak": 16.85,
+      "traded": true,
+      "realized": 15.42
+    }
   },
   "critical_gap_identified": {
     "issue": "live_pump_scanner(signal only)와 midnight_bot(실매매)의 로직/watchlist 불일치",
@@ -148,8 +219,8 @@
         "anchor_price": 10.42,
         "anchor_ts": 1775746800,
         "slope_per_sec": 0.000423,
-        "buffer": 0.10,
-        "flat_floor": 11.50,
+        "buffer": 0.1,
+        "flat_floor": 11.5,
         "peak_trail_activate_above": 13.0,
         "peak_trail_drop_pct": 4.0
       },
@@ -176,5 +247,28 @@
     "Cron 4ffa89d0: 1분 heartbeat + early scan + 차트 + 매매",
     "Cron dea2fc69: 2~9시 5분 차트 스캔",
     "Cron ee0d5220: 10분 morning-report git sync"
+  ],
+  "claude_chart_scan_trades": [
+    {
+      "coin": "NOM",
+      "entry_ts_kst": "2026-04-10T04:53:16+09:00",
+      "exit_ts_kst": "2026-04-10T05:00:30+09:00",
+      "entry_price_avg": 22.778,
+      "exit_price_avg": 22.56,
+      "qty": 26340.97,
+      "invested_krw": 600000,
+      "returned_krw": 594252,
+      "pnl_pct": -0.96,
+      "pnl_krw": -5748,
+      "entry_trigger": "chart_scan breakout: 04:50 vol 43M 양봉 22.05->22.76, 2h staircase 19.58->22.76, vol24 14.9B",
+      "exit_trigger": "red_candle_exit 3 consecutive red (04:57 B, 04:58 B, 04:59 B)",
+      "learnings": [
+        "market buy slippage +1.08% (cur 22.53 -> avg 22.778) - feedback_slippage_observation 재확인",
+        "red_candle_exit n=3 너무 tight - swing pullback과 실제 dump 구분 필요",
+        "다음 포지션: n=3 AND (drop_from_peak>=2.5% OR cur<entry) 조건 추가",
+        "NOM tick size error 10 발견 (지정가 22.54 거부) - tick 재조사 필요",
+        "매도 후 즉시 22.50->22.92 반등 = chop out 확인, 감정적 재진입 금지"
+      ]
+    }
   ]
 }
