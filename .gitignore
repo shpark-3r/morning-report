@@ -33,3 +33,8 @@ ocx_doc.html
 # OS
 .DS_Store
 Thumbs.db
+
+# Cron state / logs
+cron_*.log
+.cron_last_commit
+auto_push.log
