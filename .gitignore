@@ -26,6 +26,7 @@ test_output.txt
 indi_test_log.txt
 ocx_doc.html
 *.bat
+!cron_*.bat
 
 # Claude Code local
 .claude/
