@@ -101,5 +101,80 @@
     "bot_live.log도 00:02:44~00:27 scan: quiet 지속",
     "Q-1 '자정 대장' 가설 1건 지지 + 다단 패턴(BOB)과 단발 패턴(GRND) 둘 다 동시 발생 관측",
     "사용자 잔고: 15:29 706K → 00:07 761K (+55K, XTER 청산 + GRND 익절 합산)"
+  ],
+  "additional_trades_0030_0130": [
+    {
+      "coin": "PYR",
+      "source": "midnight_bot existing position auto-traded",
+      "entry_time": "pre 00:25 (inferred)",
+      "entry_price": 390.0,
+      "qty": 1854.52010998,
+      "exit_time_kst": "2026-04-10T00:28:44+09:00",
+      "exit_price": 378,
+      "exit_reason": "SL_HARD -3.08%",
+      "pnl_pct": -3.08,
+      "net_loss_krw_approx": -22000,
+      "note": "midnight_bot restart 후 [SYNC]로 복구된 포지션, 하드 SL 기본값 -3%였음 (현재 -99로 비활성화 완료)"
+    },
+    {
+      "coin": "BOB",
+      "attempt": 1,
+      "source": "user_manual_buy_auto_sold_by_midnight_bot",
+      "entry_time_kst": "~2026-04-10T00:48:00+09:00",
+      "entry_price_approx": 12.28,
+      "qty_approx": 53415,
+      "exit_time_kst": "2026-04-10T00:51:59+09:00",
+      "exit_price_approx": 11.91,
+      "exit_reason": "midnight_bot SL_HARD -3.01% (user 의사와 무관, sync 갭 문제)",
+      "pnl_pct": -3.01,
+      "net_loss_krw_approx": -20000,
+      "note": "**치명적 갭**: 사용자 수동 매수 → midnight_bot [SYNC] 자동 인수 → 자동 손절. 사용자는 직전에 '손절 불필요'라고 명시했는데 봇이 개입. 이후 midnight_bot SL_HARD -99로 비활성화"
+    },
+    {
+      "coin": "BOB",
+      "attempt": 2,
+      "source": "user_manual_reentry_claude_managed",
+      "entry_time_kst": "~2026-04-10T00:55:00+09:00",
+      "entry_price": 11.87,
+      "qty": 53256.41246504,
+      "invested_krw": 632154,
+      "exit_time_kst": "2026-04-10T01:02:22+09:00",
+      "exit_price": 11.74,
+      "exit_reason": "CH_BRK — Claude 채널 하단 breakdown 판단 (cur 11.74 < threshold 11.89)",
+      "exit_executed_by": "claude_primary (order_sell_market)",
+      "pnl_pct": -1.16,
+      "net_loss_krw_approx": -7343,
+      "channel_stop_rule": {
+        "anchor_price": 10.42,
+        "anchor_ts": 1775746800,
+        "slope_per_sec": 0.000423,
+        "buffer": 0.10,
+        "flat_floor": 11.50,
+        "peak_trail_activate_above": 13.0,
+        "peak_trail_drop_pct": 4.0
+      },
+      "note": "⭐ **첫 Claude 주도 실전 매도 체결 성공**. 사용자 '채널 이탈 시 손절' 지시 이행. 채널 기반 손절이 HARD_STOP -3%보다 빠른 탈출 가능 (-1.16% vs -3%). 단, midnight_bot은 이 포지션을 [SYNC]로 여전히 들고 있다고 착각하는 상태 불일치 발생 (재시작으로 해결)"
+    }
+  ],
+  "user_deposit": {
+    "time_kst": "2026-04-10T01:24:00+09:00",
+    "amount_krw": 350000,
+    "source": "borrowed",
+    "balance_before": 626394,
+    "balance_after": 976394,
+    "user_directive": "오늘 내 976K → 180만 달성 (+82%). 대장 1회 잡기.",
+    "strategy_shift": "aggressive_recovery_single_big_win",
+    "note": "사용자 빚 투입 + 복구 압박 + 대형 펌프 1회 잡기 전략 확정"
+  },
+  "claude_systems_built": [
+    "early_scanner.py: 451 coin 전수 스캔 0.7s (aiohttp 병렬)",
+    "claude_watchdog.py: heartbeat 감시 + winsound 사이렌 (Task Scheduler 독립)",
+    "widget.py SIREN 테스트 버튼 추가",
+    "midnight_bot.py: SL_HARD -99 / TIME 99999 / RED_DUMP -6 완화 + STAGES trail만 유지",
+    "claude_position.json: channel_stop + flat_floor + peak_trail 3단 rule 스키마",
+    "knowledge/patterns.md: JOE/ENJ/XION/GRND 4단계 구조 + 초기 포착 공식 저장",
+    "Cron 4ffa89d0: 1분 heartbeat + early scan + 차트 + 매매",
+    "Cron dea2fc69: 2~9시 5분 차트 스캔",
+    "Cron ee0d5220: 10분 morning-report git sync"
   ]
 }
