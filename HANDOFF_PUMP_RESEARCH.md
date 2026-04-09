@@ -10,9 +10,42 @@
 - **TRAC/XTER 같은 1~2분 폭발 타입은 노리지 않음** (대응 불가). 점진 펌프(JOE/XION/ENJ/XYO/COMP/DBR/PYR 등)만 타겟.
 - **손실 회복 베팅 spiral 위험** — 메모리 가이드라인 참고. 어떤 결과도 베팅 사이즈 늘리는 근거로 쓰지 말 것.
 
-## 2. 핵심 발견 (4/9 분석)
+## 2. 핵심 발견
 
-### 검증된 신호 (1분봉 multi-lookback adaptive)
+### ⭐⭐⭐ 4/10 결정적 돌파구: Immediate Burst signal
+
+**사용자 핵심 통찰**: "매일이 작전 day다. Claude는 사람과 다를 바 없이 차트로 판단할 수 있다."
+
+이전 backward-looking 신호(직전 5분 누적)는 ENJ 4/9 00:15 같은 가속 시작점을 못 잡음 (직전 5분 박스권). **immediate burst 신호 정의로 전환** → 사용자 직관과 일치하는 결과.
+
+**Immediate burst signal 정의**:
+```python
+# 가장 최근 1분봉이 즉시 vol burst
+candle[i].vol >= baseline_30 * 20x  # vol burst
+candle[i].close > candle[i].open    # 양봉
+gain >= 5%                            # 의미 있는 가격 변화
+tv >= 50M KRW                         # 슬리피지 가능한 거래액
+```
+
+**검증 결과 (n=77, 20/29 day cover)**:
+- win 49%, gross +2.17%, **EV @0.3% +1.49%** (D adaptive trailing)
+- 사용자 매일 작전 직관 데이터로 입증 (20/29 days +30% pump 발생)
+- 단조 패턴 확인: vol_x 5 → 10 → 20 → 30 → 50 EV 양수 증가
+
+**결정적 검증 — ENJ 4/9 00:15**:
+- 사용자가 본 ENJ 00시 폭발 (4/9 차트)
+- vol_x 118x, gain +5.1%, tv 87M
+- 신호 → 진입 47원 → trail exit ~~ **+33.27%** ⭐
+
+이전 backward 신호는 이걸 못 잡았음 (5분 누적 tv 5M < 200M).
+
+**왜 backward가 잘못됐는가**:
+- 펌프 시작 직전 5분: 박스권, vol 거의 0
+- 펌프 시작 후 1분: vol 폭발
+- 직전 5분 평균을 보면 → 작은 값 → 신호 미통과
+- **옳은 접근**: 봉 자체의 immediate burst 측정
+
+### 검증된 신호 (1분봉 multi-lookback adaptive) — 이전 분석, deprecated
 
 ```
 조건 (전부 만족):
@@ -244,17 +277,60 @@ forward 누적 1~2주 후, 새 데이터로 strict signal EV 재측정. n=31 →
 
 ### 워커 클로드에게 추가 작업
 
-#### A. 즉시 (Day 1)
+#### ⭐ A. 즉시 — Claude judgment 구조 (4/10 사용자 핵심 요청)
 
-1. **`live_pump_scanner.py` 알림 통합**
-   - 옵션 1: Notion API로 신호 발생 시 페이지 생성 (이미 indi_config.py에 NOTION_API_KEY 있음)
-   - 옵션 2: 텔레그램 봇 (사용자가 알림 즉시 보려면 이게 best)
-   - 신호 페이로드에 빗썸 차트 URL 포함: `https://www.bithumb.com/react/trade/order/{COIN}_KRW`
+**사용자 비전**: 
+> "Claude는 사람과 다를 바 없다. 차트를 보고 직접 판단할 수 있다. 봇은 손과 발 (데이터 수집/실행), Claude는 눈과 머리 (판단)."
 
-2. **`live_pump_scanner.py --watch --strict --filter` 24시간 백그라운드 실행**
-   - Windows Task Scheduler 또는 별도 process로
+**구조**:
+```
+[봇 = Python script]                       [Claude = Anthropic API]
+1. 1분마다 451 코인 스캔 (immediate burst)
+2. 후보 신호 N개 detection
+3. 각 후보의 차트 데이터 텍스트화        →
+   (직전 60분 1분봉 OHLCV + vol_x 마커)
+                                            4. 차트 패턴 분석
+                                            5. 진짜 펌프 / 가짜 판단
+                                            6. 진입 GO / SKIP
+                                            7. 청산 트리거 정의 (예: 음봉 + vol↑)
+   ←                                       
+8. GO → 봇이 진입 (시장가 또는 알림)
+9. 진입 후 1분마다:
+   현재 가격 + 신규 봉 + vol → Claude       →
+                                            10. 청산 / HOLD 판단
+                                            11. 음봉 전환, 모멘텀 둔화 인식
+   ←
+12. EXIT → 봇이 청산
+```
+
+**구현 단계 (워커 클로드)**:
+
+1. **차트 텍스트 렌더러** — 이미 있음 (`poc_claude_judgment.py`의 `render_chart_text()`)
+2. **Anthropic API integration** — `pip install anthropic`, `claude-sonnet-4-6` 모델 사용
+3. **Tool use 정의**:
+   - `analyze_pump_chart(coin, chart_text)` → judgment + reasoning
+   - `decide_exit(coin, current_chart, entry_price, elapsed_min)` → exit/hold
+4. **봇 메인 루프**:
+   ```python
+   while True:
+       candidates = scan_burst_signals()
+       for c in candidates:
+           chart = render_chart_text(c)
+           judgment = call_claude(chart, system_prompt="...")
+           if judgment.decision == 'GO':
+               place_order(c.coin, ...)
+               monitor_position(c.coin, claude_exit_loop)
+       sleep(60)
+   ```
+5. **응답 시간 보완**: Claude 응답이 5~30초라 1분봉 단위 매매 가능. 청산은 1분봉 마감 직후 즉시 트리거.
+
+#### B. 알림 (Claude judgment 없이 사용자 매매)
+
+1. **`live_pump_scanner.py --burst --watch` 24시간 백그라운드**
    - 매 1분마다 451 코인 스캔
-   - `live_signals_YYYY-MM-DD.jsonl`에 자동 로깅
+   - 신호 발생 시 `live_signals_YYYY-MM-DD.jsonl`에 로깅
+   - Notion API 또는 텔레그램 alert
+   - 차트 URL 포함: `https://www.bithumb.com/react/trade/order/{COIN}_KRW`
 
 3. **호가창 슬리피지 측정 모듈** (가장 중요!)
    - 신호 발생 즉시 `https://api.bithumb.com/public/orderbook/{COIN}_KRW` 호출

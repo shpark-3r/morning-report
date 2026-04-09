@@ -1,40 +1,44 @@
 """
 라이브 펌프 신호 스캐너 (forward 검증용).
 
-사용법:
-  python live_pump_scanner.py                    # base 신호
-  python live_pump_scanner.py --strict           # strict 신호
-  python live_pump_scanner.py --strict --filter  # strict + FP 필터 (best EV)
-  python live_pump_scanner.py --watch            # 1분마다 반복
+사용법 (4/10 ⭐ 새 default):
+  python live_pump_scanner.py --burst              # NEW default: immediate burst
+  python live_pump_scanner.py --burst --strong     # 더 strict (vol≥30x)
+  python live_pump_scanner.py --burst --watch      # 1분마다 반복
 
-신호 정의 (4/9 분석에서 검증):
+기존 (deprecated, backward-looking):
+  python live_pump_scanner.py                      # base (multi-lookback adaptive)
+  python live_pump_scanner.py --strict             # strict
+  python live_pump_scanner.py --strict --filter    # strict + FP filter
 
-[Base] Multi-lookback adaptive
-  - cumulative gain: 5분+5% OR 10분+7% OR 15분+10% OR 30분+15%
-  - 양봉 비율 ≥ 60% (직전 5분 중 3봉)
-  - 5분 누적 tv ≥ 30M KRW
-  - dedupe: 같은 코인 10분 내 1건만
-  - 검증: precision 10.3% (future +20%)
+신호 정의 (4/9 분석 + 4/10 immediate burst 추가):
 
-[Strict] (--strict)
-  - + tv_5min ≥ 200M
-  - + vol_ratio_5 (vs 직전 30분 baseline) ≥ 10x
-  - 검증: precision 19.4%, EV @0.3% +1.33% (D adaptive trailing)
+[⭐ Immediate Burst] (--burst, 권장)
+  - 가장 최근 1분봉이 양봉 + vol ≥ baseline_30 × 20x + gain ≥ 5% + tv ≥ 50M
+  - dedupe: 같은 코인 10분 내 1건
+  - 검증 (n=77, 20/29 day cover):
+    - win rate 49%, EV @0.3% +1.49% (D adaptive trailing)
+    - sig/day 평균 2.6건
+  - ⭐ ENJ 4/9 00:15 (사용자 본 펌프) 잡음, exit +33.27%
+  - 핵심: backward-looking 5분 누적이 아니라 봉 자체의 즉시 burst
 
-[Strict + FP filter] (--strict --filter)
-  - + 22-02시 제외 (밤 작전 dump 회피)
-  - + triggered_gain ≥ 10%
-  - + bar_gain < 7% (신호 봉이 끝물 아님)
-  - 검증: 90% win rate, EV @0.3% +6.10% (n=10, ⚠️ cherry pick 위험)
+[⭐⭐ Immediate Burst Strong] (--burst --strong)
+  - vol ≥ 30x, gain ≥ 5%, tv ≥ 50M
+  - 검증 (n=66): EV @0.3% +1.60%, win 47%, sig/day 2.2
+  - 더 strict하지만 표본 약간 적음
 
-검증된 사용자 사례 (D adaptive trailing):
-  ENJ 4/9 11:39 → exit +6.70% (net)
-  JOE 4/8 06:38 → exit +1.32% (보수적, A 전략으로는 더 잘 잡음)
-  XION 4/7 14:35 → exit +14.58%
-  XYO 3/31 18:02 → exit +21.51%
+[Base] (multi-lookback, deprecated)
+  - 5분+5% OR 10분+7% OR 15분+10% OR 30분+15% (backward-looking)
+  - 단점: ENJ 00:15 같은 가속 시작점을 못 잡음 (직전 5분이 박스권)
 
-⚠️ 표본 10~31건 작음. 라이브는 paper trading부터.
-⚠️ 라이브 슬리피지가 결정자. slip 1% 시 EV -0.07% (break-even).
+검증된 사용자 사례 (Immediate burst + D adaptive trailing):
+  ENJ 4/9 00:15 (vol 118x, +5.1%) → exit +33.27% ⭐⭐⭐
+  XION 4/7 14:38 (vol 18x) → exit +2.00%
+  XYO 3/31 18:01 (vol 62x) → exit +12.31%
+
+⚠️ 표본 77건 (immediate burst 20x). 라이브는 paper trading부터.
+⚠️ 라이브 슬리피지가 결정자. 호가창 측정 필수.
+⚠️ 매일 작전 day 가설은 데이터로 입증됨 (20/29 days +30% pump 발생).
 """
 import urllib.request
 import json
@@ -70,6 +74,51 @@ def parse_candles(raw):
         except (ValueError, IndexError):
             continue
     return candles
+
+
+def check_burst_signal(candles, strong=False):
+    """
+    ⭐ Immediate burst signal (4/10 default).
+    가장 최근 봉이 vol burst + 양봉.
+
+    조건:
+      - candle[i] vol >= baseline_30 * vol_x (default 20x, strong 30x)
+      - candle[i] is up bar (close > open)
+      - gain >= 5%
+      - tv >= 50M
+    """
+    if len(candles) < 35:
+        return None
+    i = len(candles) - 1
+    ts, o, c, h, l, v = candles[i]
+    if c <= o or v <= 0 or o <= 0:
+        return None
+
+    gain = (c - o) / o * 100
+    if gain < 5:
+        return None
+
+    tv = c * v
+    if tv < 50e6:
+        return None
+
+    base_vol = sum(candles[j][5] for j in range(i - 30, i)) / 30
+    if base_vol <= 0:
+        return None
+    vol_x = v / base_vol
+
+    min_vol_x = 30 if strong else 20
+    if vol_x < min_vol_x:
+        return None
+
+    return {
+        'ts': ts,
+        'price': c,
+        'vol_x': vol_x,
+        'gain': gain,
+        'tv': tv,
+        'mode': 'burst_strong' if strong else 'burst',
+    }
 
 
 def check_signal(candles, strict=False, fp_filter=False):
@@ -169,9 +218,10 @@ def load_coin_list():
     return coins
 
 
-def scan(strict=False, fp_filter=False):
+def scan(strict=False, fp_filter=False, burst=False, strong=False):
     coins = load_coin_list()
-    print(f'[{datetime.now(KST):%H:%M:%S}] Scanning {len(coins)} coins (strict={strict}, fp_filter={fp_filter})...')
+    mode = 'burst_strong' if (burst and strong) else 'burst' if burst else f'strict={strict},fp={fp_filter}'
+    print(f'[{datetime.now(KST):%H:%M:%S}] Scanning {len(coins)} coins (mode={mode})...')
 
     signals = []
     for i, coin in enumerate(coins, 1):
@@ -181,22 +231,36 @@ def scan(strict=False, fp_filter=False):
         candles = parse_candles(raw)
         if not candles:
             continue
-        sig = check_signal(candles, strict=strict, fp_filter=fp_filter)
+        if burst:
+            sig = check_burst_signal(candles, strong=strong)
+        else:
+            sig = check_signal(candles, strict=strict, fp_filter=fp_filter)
         if sig:
             signals.append({**sig, 'coin': coin})
         time.sleep(0.1)  # rate limit
 
     print(f'\n=== Signals found: {len(signals)} ===')
     if signals:
-        # very_strict 우선
-        signals.sort(key=lambda s: (-s['very_strict'], -s['tv_5min']))
-        for s in signals:
-            dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
-            marker = '*** VERY STRICT ***' if s['very_strict'] else ''
-            print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
-                  f'lb={s["triggered_lb_min"]:>2}min gain={s["triggered_gain"]:>+5.1f}% '
-                  f'tv5={s["tv_5min"]/1e6:>5.0f}M vr5={s["vol_ratio_5"]:>5.1f}x '
-                  f'price={s["price"]} {marker}')
+        # burst 우선
+        if burst:
+            signals.sort(key=lambda s: -s.get('vol_x', 0))
+            for s in signals:
+                dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
+                marker = '*** STRONG ***' if s.get('mode') == 'burst_strong' else ''
+                chart_url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
+                print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
+                      f'vol_x={s["vol_x"]:>6.0f}x gain={s["gain"]:>+5.1f}% '
+                      f'tv={s["tv"]/1e6:>4.0f}M price={s["price"]} {marker}')
+                print(f'             → {chart_url}')
+        else:
+            signals.sort(key=lambda s: (-s.get('very_strict', 0), -s.get('tv_5min', 0)))
+            for s in signals:
+                dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
+                marker = '*** VERY STRICT ***' if s.get('very_strict') else ''
+                print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
+                      f'lb={s["triggered_lb_min"]:>2}min gain={s["triggered_gain"]:>+5.1f}% '
+                      f'tv5={s["tv_5min"]/1e6:>5.0f}M vr5={s["vol_ratio_5"]:>5.1f}x '
+                      f'price={s["price"]} {marker}')
 
         # 로그 저장
         log_file = f'live_signals_{datetime.now(KST):%Y-%m-%d}.jsonl'
@@ -213,13 +277,15 @@ def scan(strict=False, fp_filter=False):
 def main():
     strict = '--strict' in sys.argv
     fp_filter = '--filter' in sys.argv
+    burst = '--burst' in sys.argv
+    strong = '--strong' in sys.argv
     watch = '--watch' in sys.argv
 
     if watch:
         print('Watch mode: scanning every 60 seconds')
         while True:
             try:
-                scan(strict=strict, fp_filter=fp_filter)
+                scan(strict=strict, fp_filter=fp_filter, burst=burst, strong=strong)
             except KeyboardInterrupt:
                 print('\nStopped.')
                 break
@@ -227,7 +293,7 @@ def main():
                 print(f'Error: {e}')
             time.sleep(60)
     else:
-        scan(strict=strict, fp_filter=fp_filter)
+        scan(strict=strict, fp_filter=fp_filter, burst=burst, strong=strong)
 
 
 if __name__ == '__main__':
