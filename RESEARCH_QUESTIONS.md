@@ -693,7 +693,84 @@ start /b python live_pump_scanner.py --burst --watch
 
 ---
 
-## 🚨🚨 Q-22: "22~01시 전액 베팅" 권고 — Kelly 6배 over-betting 경고
+## ✅ Q-22 RESOLVED (4/10 11:15 사용자 동의): Tier 등급 베팅 시스템
+
+**사용자 답변 (4/10 11:14)**: "전액베팅도 좋아요 컨피던스가 있다면요"
+
+**합의된 베팅 사이즈 룰 (Tier 시스템)**:
+
+| Tier | 조건 | 베팅 사이즈 | 결정자 |
+|---|---|---|---|
+| **S** | 검증 신호 + 사용자 차트 OK + 작전 시간대 + 거래액 ≥5억 + Claude 판단 일치 | **80~95% (전액 가능)** | **사용자 명시 동의 필수** |
+| **A** | 검증 신호 + (차트 OK OR 시간대) + 거래액 ≥2억 | 30~50% | 사용자 + Claude |
+| **B** | 검증 신호만 (vol≥30x, gain≥7%, tv≥100M) | **15~20%** | 봇 자동 |
+| **C** | 약한 신호 (vol≥10x, gain≥5%) | **0% (진입 차단)** | 봇 차단 |
+
+**핵심 분리**:
+- **봇 자동 매매 (사용자 부재 시)**: 무조건 **Tier B 이하 (≤20%)**. 사용자 명시 명령 없으면 절대 전액 X.
+- **사용자 수동 매매 (사용자 확신 시)**: Tier S 가능 (전액). 단 사용자 본인 판단.
+
+**즉시 워커 작업 — midnight_bot.py 코드 추가**:
+
+```python
+# midnight_bot.py
+MAX_AUTO_POSITION_PCT = 0.20  # 봇 자동 진입 절대 한도
+
+def classify_tier(signal):
+    """signal dict: vol_x, gain, tv, hour, coin"""
+    vol_x = signal['vol_x']
+    gain = signal['gain']
+    tv = signal['tv']
+    hour = signal.get('hour', 0)
+
+    is_op_hour = hour in [22, 23, 0, 1, 8]  # 작전 시간대
+    is_huge_tv = tv >= 500e6
+    is_strong = vol_x >= 30 and gain >= 7 and tv >= 100e6
+
+    if is_strong and is_op_hour and is_huge_tv:
+        return 'S'  # 사용자 명시 동의 필요
+    elif is_strong and (is_op_hour or tv >= 200e6):
+        return 'A'
+    elif is_strong:
+        return 'B'
+    else:
+        return 'C'
+
+def decide_position_size(signal, balance, user_override=None):
+    tier = classify_tier(signal)
+    if tier == 'S':
+        if user_override == 'ALLIN':  # 사용자 명시 동의
+            return balance * 0.95
+        return balance * MAX_AUTO_POSITION_PCT  # 봇 자동: 20%
+    elif tier == 'A':
+        return balance * 0.30
+    elif tier == 'B':
+        return balance * 0.15
+    else:  # C
+        return 0  # 진입 차단
+```
+
+**HANDOFF_QUICK.md에 추가할 룰**:
+- 봇 자동 매매 한도: 20%
+- 사용자 명시 override 없으면 절대 초과 금지
+- "user_override='ALLIN'" 같은 명시 플래그 필요
+
+**검증 (4/10 사례)**:
+- GRND 00:00 (vol 82x, tv 67M, 0시) = is_huge_tv False (tv 67M<500M) → **B (15~20%)**. 워커 656K 베팅 = 67% (당시 잔고 976K 가정) → ⚠️ 룰 위반. 다행히 +15% 결과 좋았지만 위험.
+- BOB 01:00 (사용자 차트 OK + 다단) = A (30~50%). 사용자 656K 매수 → 손절 -27K.
+- NOM 04:53 (chop, 6h -3.78%) = C (진입 차단). 워커 진입 → -5K.
+- VVV 10:23 (TRAC, 사용자 scope 외) = C (차단).
+
+→ **이 시스템 적용 시 NOM/VVV 진입 차단, GRND/BOB는 사이즈 제한**.
+
+**우선순위**: ✅ resolved (워커는 코드 적용만)
+
+### 워커 답
+- 
+
+---
+
+## 🚨🚨 Q-22 (원문): "22~01시 전액 베팅" 권고 — Kelly 6배 over-betting 경고
 
 **워커 Q-12 답변 (4/10 10:58)**: "22~01시는 전액 베팅 구간 (사용자 1,800K 목표)"
 
