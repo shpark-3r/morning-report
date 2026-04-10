@@ -70,6 +70,15 @@ def main():
         if sigs:
             msg['alert'] = True
             msg['summary'] = f'SIGNAL! {len(sigs)} found: ' + ', '.join(f'{s["type"]}:{s["coin"]}' for s in sigs[:3])
+            # 신호 파일에 즉시 기록 (세션에서 읽을 수 있도록)
+            with open('signal_alerts.jsonl', 'a', encoding='utf-8') as f:
+                for sig in sigs:
+                    alert = {'ts': now.isoformat(), 'type': sig['type'], 'coin': sig['coin'], 'price': sig['price']}
+                    if 'detail' in sig:
+                        for k in ['vol_x', 'gain', 'cum_gain_10m', 'r2', 'gain_30m', 'vol_accel']:
+                            if k in sig['detail']:
+                                alert[k] = sig['detail'][k]
+                    f.write(json.dumps(alert, ensure_ascii=False) + '\n')
         else:
             msg['summary'] = f'{now:%H:%M} scan 0 signals'
 

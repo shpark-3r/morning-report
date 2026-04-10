@@ -51,3 +51,6 @@ burst_scanner.log
 *.bithumb_keys.json
 !.bithumb_keys.json.template
 git_sync.log
+bridge_cron.log
+bridge_inbox.jsonl
+signal_alerts.jsonl
