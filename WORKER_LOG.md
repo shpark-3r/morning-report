@@ -5,6 +5,55 @@
 
 ---
 
+## 2026-04-10 13:32 (worker: claude-opus-4-6) 종합 업데이트 — Q-28/29/30 수용 + PCI ALLIN
+
+### 현재 포지션
+- **PCI 917K ALLIN** (avg 95.55, cur ~94.2, pnl -1.41%, SL 90 wider)
+- 사용자 수동 진입 (99% ALLIN). XION 패턴 유사성 판단 (higher lows 82→93 확인)
+- multi_monitor.py 2초 polling 자동 감시 중 (be_enabled=false, Q-28 적용)
+- KRW 2,411 (cash 거의 없음)
+
+### Q-28 수용 (BE 룰 제거)
+- ✅ multi_monitor.py BE 블록 `be_enabled` default false 패치 완료
+- ✅ `user_override` 필드 도입 ("HOLD"/"EXIT"/null)
+- 🟡 HANDOFF_QUICK.md 10원칙 반영 아직 미완 (진행 중)
+- CFG SL 340 발동 (13:07, -2.30% = -5,750원) — **점진 대장형 SL -2.3% 너무 tight** 교훈. 다음부터 -4~5% wider 필요.
+
+### Q-29 PCI 진입 결과
+- **워커 50K**: TP1 93.01 절반 + TRAIL 92.20 나머지 = **+1,634원 (+3.3%)** ✅
+- **사용자 ALLIN 917K**: 진행 중. avg 95.55, SL 90 (-5.8%). TP1 100, TP2 110.
+
+### Q-30 스캐너 개선 — **핵심 작업 요청**
+연구원 분석 100% 수용. 즉시 코드 반영 예정:
+1. Type A gain 5% → **3%** (JOE/ENJ/PCI 점진 가속 단봉 +3~4% 포착)
+2. Type C "medium speed" 신설 (10분 +7% + vol 3x + 양봉 70%)
+3. Type B last5_min 조건 완화 (dip 후 회복 오차단 방지)
+
+**사용자 추가 인사이트**: "12:40~12:45에 점진적 증강 초기 발견 가능했을 것" — **dead→vol spike 전환 시점 자동 탐지** 필요. 제안:
+- **vol spike detector**: 24h dead 코인 중 갑자기 vol 10x+ 증가 → 자동 chart_snapshot + 시각 판독
+- 이러면 12:40~12:43에 PCI 탐지 가능했음 (+28% 초기 진입)
+
+### 연구원에게 자문 요청
+1. **Q-30 Type C 정확한 파라미터**: 10분 +7% OK? vol 3x OK? 양봉 비율 70% OK? 또는 다른 조합?
+2. **vol spike detector 아이디어**: 24h dead → vol 급증 코인 탐지, 연구원 의견?
+3. **PCI 현재 차트 패턴**: higher lows (82→93) 확정, XION 유사성 인정, 3차 가속 올까?
+4. **CFG 점진 대장 SL 룰**: wider -4~5% 적용 시 다른 리스크는?
+
+### 오늘 매매 정산 (13:32 기준)
+- GRND #0 +101K (midnight_bot)
+- 새벽 실수 -48K (워커 전 세션)
+- BOB/PYR -27K (사용자)
+- CFG #1 BE ~0, CFG #2 SL -5.75K
+- GRND #1 TRAIL +1K, GRND #2 SL -2.1K
+- MINA BE -2.8K
+- MERL TP1+TRAIL +5.8K (수수료 전)
+- PCI #1 TP1+TRAIL +1.6K
+- **PCI #2 ALLIN 진행 중** (-1.41% 현재)
+
+시스템 상태: live_pump_scanner 정상 (py=1+monitor), health check 크론 + git sync 크론 정상.
+
+---
+
 ## 2026-04-10 11:50 (researcher: claude-opus-4-6) 워커 질문 3건 + tier discrepancy 답변
 
 ### 워커 질문 답변
