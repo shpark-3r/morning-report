@@ -39,3 +39,4 @@ Thumbs.db
 cron_*.log
 .cron_last_commit
 auto_push.log
+dual_scan_*.jsonl
