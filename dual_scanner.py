@@ -277,6 +277,7 @@ def main():
     graduals = []
     mediums = []
     quiets = []
+    earlys = []
 
     for i, coin in enumerate(coins, 1):
         raw = fetch_candles(coin, '1m')
@@ -297,6 +298,9 @@ def main():
         q = check_quiet_gradual(candles)
         if q:
             quiets.append({**q, 'coin': coin})
+        e = check_early_gradient(candles)
+        if e:
+            earlys.append({**e, 'coin': coin})
         time.sleep(0.08)
 
     print(f'\n=== TYPE A (BURST): {len(bursts)} signals ===')
@@ -342,15 +346,111 @@ def main():
     else:
         print('  None')
 
+    print(f'\n=== TYPE E (EARLY GRADIENT 5min): {len(earlys)} signals ===')
+    if earlys:
+        earlys.sort(key=lambda s: -s.get('r2_10m', 0))
+        for s in earlys:
+            dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
+            url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
+            print(f'  [{dt:%H:%M}] {s["coin"]:>10} R2={s.get("r2_10m",0):.2f} 5m={s.get("gain_5m",0):>+5.1f}% slope={s.get("slope",0):.4f} tv5={s.get("tv_5m",0)/1e6:>4.0f}M @{s["price"]}')
+            print(f'             -> {url}')
+    else:
+        print('  None')
+
     # 로그 저장
     log_file = f'dual_scan_{now:%Y-%m-%d}.jsonl'
     with open(log_file, 'a') as f:
         ts_str = now.isoformat()
-        for s in bursts + graduals + mediums + quiets:
+        for s in bursts + graduals + mediums + quiets + earlys:
             f.write(json.dumps({**s, 'scan_time': ts_str}) + '\n')
-    if bursts or graduals or mediums or quiets:
+    if bursts or graduals or mediums or quiets or earlys:
         print(f'\n  -> Logged to {log_file}')
 
 
 if __name__ == '__main__':
     main()
+
+
+def check_early_gradient(candles):
+    """Type E: Early Gradient — 5분봉 양의 기울기 감지 (사용자 직관: 5개 봉)
+
+    5분 lookback. 양봉 4/5개 + R²>0.7 + slope>0 + 60분 추세 양.
+    ONG 16:05, MERL 09:10 시점에 감지 가능.
+    """
+    if len(candles) < 65:
+        return None
+    i = len(candles) - 1
+
+    # 직전 5분 close
+    closes_5 = [candles[j][2] for j in range(i - 4, i + 1)]
+    if any(c <= 0 for c in closes_5):
+        return None
+
+    # 1. 양봉 비율 (5분 중 4개 이상 = 80%+)
+    positive_bars = sum(1 for j in range(i - 4, i + 1) if candles[j][2] > candles[j][1])
+    pos_ratio = positive_bars / 5
+    if pos_ratio < 0.80:
+        return None
+
+    # 2. R² (직전 10분으로 측정 — 5분은 표본 너무 작아 R² 불안정)
+    closes_10 = [candles[j][2] for j in range(i - 9, i + 1)]
+    n = len(closes_10)
+    x_mean = (n - 1) / 2
+    y_mean = sum(closes_10) / n
+    ss_xy = sum((j - x_mean) * (closes_10[j] - y_mean) for j in range(n))
+    ss_xx = sum((j - x_mean) ** 2 for j in range(n))
+    ss_yy = sum((closes_10[j] - y_mean) ** 2 for j in range(n))
+    if ss_xx == 0 or ss_yy == 0:
+        return None
+    r2 = (ss_xy ** 2) / (ss_xx * ss_yy)
+    if r2 < 0.65:
+        return None
+
+    # 3. slope 양수
+    slope = ss_xy / ss_xx
+    if slope <= 0:
+        return None
+
+    # 4. 5분 누적 gain 0.3% ~ 10%
+    gain_5 = (closes_5[-1] - closes_5[0]) / closes_5[0] * 100
+    if gain_5 < 0.3 or gain_5 > 10:
+        return None
+
+    # 5. 현재가 > 5분전 > 10분전 (단조 증가 확인)
+    if not (closes_5[-1] > closes_5[0] and closes_10[-1] > closes_10[0]):
+        return None
+
+    # 6. tv 최소 (5분 누적 5M 이상)
+    tv_5 = sum(candles[j][2] * candles[j][5] for j in range(i - 4, i + 1))
+    if tv_5 < 5e6:
+        return None
+
+    # 7. 60분 추세 (하락 반등 제거 — 핵심 필터)
+    if i >= 60:
+        close_60ago = candles[i - 60][2]
+        if close_60ago > 0:
+            trend_60 = (closes_5[-1] - close_60ago) / close_60ago * 100
+            if trend_60 < -2:  # 60분 전 대비 -2% 이하면 하락 추세 반등
+                return None
+
+    # 8. 30분 추세도 양수 (추가 안전)
+    if i >= 30:
+        close_30ago = candles[i - 30][2]
+        if close_30ago > 0:
+            trend_30 = (closes_5[-1] - close_30ago) / close_30ago * 100
+        else:
+            trend_30 = 0
+    else:
+        trend_30 = 0
+
+    return {
+        'type': 'EARLY_GRADIENT',
+        'ts': candles[i][0],
+        'price': candles[i][2],
+        'r2_10m': r2,
+        'gain_5m': gain_5,
+        'trend_30m': trend_30,
+        'pos_ratio': pos_ratio,
+        'slope': slope,
+        'tv_5m': tv_5,
+    }

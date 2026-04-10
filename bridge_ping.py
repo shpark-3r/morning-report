@@ -17,7 +17,7 @@ PORT = 9999
 
 def scan_quick():
     """빠른 스캔 (Type A/C만, 속도 우선)"""
-    from dual_scanner import load_coins, fetch_candles, parse, check_burst, check_medium, check_quiet_gradual
+    from dual_scanner import load_coins, fetch_candles, parse, check_burst, check_medium, check_quiet_gradual, check_early_gradient
     coins = load_coins()
     sigs = []
     for coin in coins:
@@ -27,7 +27,7 @@ def scan_quick():
         candles = parse(raw)
         if not candles:
             continue
-        for ck, t in [(check_burst, 'A'), (check_medium, 'C'), (check_quiet_gradual, 'D')]:
+        for ck, t in [(check_burst, 'A'), (check_medium, 'C'), (check_quiet_gradual, 'D'), (check_early_gradient, 'E')]:
             r = ck(candles)
             if r:
                 sigs.append({'type': t, 'coin': coin, 'price': r['price'], 'detail': r})
@@ -70,7 +70,7 @@ def main():
         if sigs:
             msg['alert'] = True
             # 신호 랭킹: R2 + gain 기준 정렬
-            ranked = sorted(sigs, key=lambda s: -(s.get('detail', {}).get('r2', 0) * 100 + s.get('detail', {}).get('gain_30m', s.get('detail', {}).get('cum_gain_10m', 0))), )
+            ranked = sorted(sigs, key=lambda s: -(max(s.get('detail', {}).get('r2', 0), s.get('detail', {}).get('r2_10m', 0)) * 100 + s.get('detail', {}).get('gain_30m', s.get('detail', {}).get('gain_5m', s.get('detail', {}).get('cum_gain_10m', 0)))), )
             top = ranked[0]
             msg['summary'] = f'SIGNAL! {len(sigs)} found. TOP: {top["type"]}:{top["coin"]}@{top["price"]}'
             msg['top_signal'] = top
@@ -80,7 +80,7 @@ def main():
                 for sig in sigs:
                     alert = {'ts': now.isoformat(), 'type': sig['type'], 'coin': sig['coin'], 'price': sig['price']}
                     if 'detail' in sig:
-                        for k in ['vol_x', 'gain', 'cum_gain_10m', 'r2', 'gain_30m', 'vol_accel']:
+                        for k in ['vol_x', 'gain', 'cum_gain_10m', 'r2', 'r2_10m', 'gain_30m', 'gain_5m', 'slope', 'vol_accel']:
                             if k in sig['detail']:
                                 alert[k] = sig['detail'][k]
                     f.write(json.dumps(alert, ensure_ascii=False) + '\n')
