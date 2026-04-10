@@ -45,3 +45,4 @@ dual_scan_*.jsonl
 live_scanner_heartbeat.txt
 live_scanner.log
 burst_scanner.log
+git_sync.log
