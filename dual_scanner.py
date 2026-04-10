@@ -1,10 +1,14 @@
 """
-Dual scanner — burst + gradual 동시 스캔.
+Dual scanner v2 — burst + gradual + medium 동시 스캔.
 
-Type A: Immediate burst (vol_x 20x + gain 5% + tv 50M)
-Type B: Gradual buildup (직전 30분 누적 +10% + 양봉 60% + tv 누적 ≥ 300M)
+Type A: Immediate burst (vol_x 10x + gain 3% + tv 30M) ← 완화 (Q-30)
+Type B: Gradual buildup (30분 +10% + 양봉 60% + tv30m ≥ 300M) ← last5_min 수정
+Type C: Medium speed acceleration (10분 +7% + vol 3x + 양봉 70% + tv10m ≥ 100M) ← 신규
 
-각 타입 신호 발생 코인 모두 출력.
+PCI 12:41 미탐지 원인 해결:
+- Type A gain 5%→3%: PCI 단봉 max +4.6% (이전 미탐지) → 3% 통과
+- Type B last5_min: -4.3% 음봉 후 회복 시 허용
+- Type C: PCI 12:48 시점 10분 +10.9% 탐지 가능
 """
 import urllib.request
 import json
@@ -42,7 +46,7 @@ def parse(raw):
 
 
 def check_burst(candles):
-    """Type A: 마지막 1분봉이 즉시 vol burst"""
+    """Type A: vol burst (완화: gain 3%, vol_x 10x, tv 30M)"""
     if len(candles) < 35:
         return None
     i = len(candles) - 1
@@ -50,28 +54,28 @@ def check_burst(candles):
     if c <= o or v <= 0 or o <= 0:
         return None
     gain = (c - o) / o * 100
-    if gain < 5:
+    if gain < 3:
         return None
     tv = c * v
-    if tv < 50e6:
+    if tv < 30e6:
         return None
     base_vol = sum(candles[j][5] for j in range(i - 30, i)) / 30
     if base_vol <= 0:
         return None
     vol_x = v / base_vol
-    if vol_x < 20:
+    if vol_x < 10:
         return None
-    return {'type': 'BURST', 'ts': ts, 'price': c, 'vol_x': vol_x, 'gain': gain, 'tv': tv}
+    strength = 'STRONG' if (vol_x >= 30 and gain >= 5 and tv >= 100e6) else 'NORMAL'
+    return {'type': f'BURST_{strength}', 'ts': ts, 'price': c, 'vol_x': vol_x, 'gain': gain, 'tv': tv}
 
 
 def check_gradual(candles):
-    """Type B: 직전 30분 누적 +10% + 양봉 60% + tv 누적 ≥ 300M"""
+    """Type B: 30분 점진 (last5_min 수정: 회복 시 허용)"""
     if len(candles) < 35:
         return None
     i = len(candles) - 1
     ts, o, c, h, l, v = candles[i]
 
-    # 30분 전 close
     start_idx = i - 30
     if start_idx < 0:
         return None
@@ -82,26 +86,33 @@ def check_gradual(candles):
     if cum_gain < 10:
         return None
 
-    # 30봉 양봉 비율
     up = sum(1 for j in range(start_idx, i + 1) if candles[j][2] > candles[j][1])
     up_ratio = up / 31
-    if up_ratio < 0.6:
+    if up_ratio < 0.55:
         return None
 
-    # 30분 누적 tv
     tv_30 = sum(candles[j][2] * candles[j][5] for j in range(start_idx, i + 1))
     if tv_30 < 300e6:
         return None
 
-    # 직전 5분 음봉 최대 (-2% 이하 dump 없으면)
+    # 수정: last5_min 조건 완화
+    # 이전: -3% 음봉 있으면 무조건 차단
+    # 신규: -3% 음봉 있어도, 현재 봉이 양봉이고 직전 low보다 높으면 허용 (회복 확인)
     last_5_gains = []
+    last_5_lows = []
     for j in range(i - 4, i + 1):
         bo, bc = candles[j][1], candles[j][2]
         if bo > 0:
             last_5_gains.append((bc - bo) / bo * 100)
+        last_5_lows.append(candles[j][4])
     last5_min = min(last_5_gains) if last_5_gains else 0
+
     if last5_min < -3:
-        return None  # 직전 5분에 큰 음봉 있으면 끝물
+        # 회복 확인: 현재 close가 5분 low 최저점보다 +2% 이상 위?
+        min_low = min(last_5_lows) if last_5_lows else c
+        recovery = (c - min_low) / min_low * 100 if min_low > 0 else 0
+        if recovery < 2:
+            return None  # 회복 안 됨 = 진짜 끝물
 
     return {
         'type': 'GRADUAL',
@@ -111,6 +122,62 @@ def check_gradual(candles):
         'up_ratio': up_ratio,
         'tv_30m': tv_30,
         'last5_min_bar': last5_min,
+    }
+
+
+def check_medium(candles):
+    """Type C: Medium speed (10분 +7% + vol 3x + 양봉 70% + tv10m >= 100M)
+    PCI 12:48 패턴 탐지용.
+    """
+    if len(candles) < 15:
+        return None
+    i = len(candles) - 1
+    ts, o, c, h, l, v = candles[i]
+
+    # 10분 전 close
+    if i < 10:
+        return None
+    start_close = candles[i - 10][2]
+    if start_close <= 0:
+        return None
+    cum_gain_10 = (c - start_close) / start_close * 100
+    if cum_gain_10 < 7:
+        return None
+
+    # 10봉 양봉 비율
+    up = sum(1 for j in range(i - 9, i + 1) if candles[j][2] > candles[j][1])
+    up_ratio = up / 10
+    if up_ratio < 0.6:
+        return None
+
+    # vol 가속 (10분 평균 vs 직전 30분 평균)
+    vol_10 = sum(candles[j][5] for j in range(i - 9, i + 1)) / 10
+    vol_30_base = sum(candles[j][5] for j in range(max(0, i - 39), i - 9)) / 30 if i >= 39 else 0
+    vol_accel = vol_10 / vol_30_base if vol_30_base > 0 else 0
+    if vol_accel < 3:
+        return None
+
+    # tv 10분 누적
+    tv_10 = sum(candles[j][2] * candles[j][5] for j in range(i - 9, i + 1))
+    if tv_10 < 100e6:
+        return None
+
+    # 5분 단위로도 체크 (더 빠른 탐지)
+    if i >= 5:
+        start_5 = candles[i - 5][2]
+        cum_gain_5 = (c - start_5) / start_5 * 100 if start_5 > 0 else 0
+    else:
+        cum_gain_5 = 0
+
+    return {
+        'type': 'MEDIUM',
+        'ts': ts,
+        'price': c,
+        'cum_gain_10m': cum_gain_10,
+        'cum_gain_5m': cum_gain_5,
+        'up_ratio': up_ratio,
+        'vol_accel': vol_accel,
+        'tv_10m': tv_10,
     }
 
 
@@ -132,12 +199,15 @@ def load_coins():
 
 def main():
     coins = load_coins()
-    print(f'[{datetime.now(KST):%H:%M:%S}] Dual scan: {len(coins)} coins')
-    print(f'  Type A (burst): vol≥20x + gain≥5% + tv≥50M')
-    print(f'  Type B (gradual): 30m +10% + 양봉≥60% + tv30m≥300M + 직전5분 음봉<-3% 없음')
+    now = datetime.now(KST)
+    print(f'[{now:%H:%M:%S}] Dual scan v2: {len(coins)} coins')
+    print(f'  Type A (burst):   vol>=10x + gain>=3% + tv>=30M')
+    print(f'  Type B (gradual): 30m +10% + up>=55% + tv30m>=300M (dip recovery OK)')
+    print(f'  Type C (medium):  10m +7% + up>=60% + vol_accel>=3x + tv10m>=100M')
 
     bursts = []
     graduals = []
+    mediums = []
 
     for i, coin in enumerate(coins, 1):
         raw = fetch_candles(coin, '1m')
@@ -152,6 +222,9 @@ def main():
         g = check_gradual(candles)
         if g:
             graduals.append({**g, 'coin': coin})
+        m = check_medium(candles)
+        if m:
+            mediums.append({**m, 'coin': coin})
         time.sleep(0.08)
 
     print(f'\n=== TYPE A (BURST): {len(bursts)} signals ===')
@@ -159,7 +232,9 @@ def main():
         bursts.sort(key=lambda s: -s['vol_x'])
         for s in bursts:
             dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
-            print(f'  [{dt:%H:%M}] {s["coin"]:>10} vol_x={s["vol_x"]:>6.0f}x gain={s["gain"]:>+5.1f}% tv={s["tv"]/1e6:>5.0f}M @{s["price"]}')
+            url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
+            print(f'  [{dt:%H:%M}] {s["coin"]:>10} vol_x={s["vol_x"]:>6.0f}x gain={s["gain"]:>+5.1f}% tv={s["tv"]/1e6:>5.0f}M @{s["price"]} ({s["type"]})')
+            print(f'             -> {url}')
     else:
         print('  None')
 
@@ -168,18 +243,29 @@ def main():
         graduals.sort(key=lambda s: -s['cum_gain_30m'])
         for s in graduals:
             dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
-            print(f'  [{dt:%H:%M}] {s["coin"]:>10} 30m_gain={s["cum_gain_30m"]:>+5.1f}% up_ratio={s["up_ratio"]:.0%} tv30={s["tv_30m"]/1e6:>4.0f}M last5_min={s["last5_min_bar"]:+.1f}% @{s["price"]}')
+            print(f'  [{dt:%H:%M}] {s["coin"]:>10} 30m={s["cum_gain_30m"]:>+5.1f}% up={s["up_ratio"]:.0%} tv30={s["tv_30m"]/1e6:>4.0f}M last5={s["last5_min_bar"]:+.1f}% @{s["price"]}')
+    else:
+        print('  None')
+
+    print(f'\n=== TYPE C (MEDIUM): {len(mediums)} signals ===')
+    if mediums:
+        mediums.sort(key=lambda s: -s['cum_gain_10m'])
+        for s in mediums:
+            dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
+            url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
+            print(f'  [{dt:%H:%M}] {s["coin"]:>10} 10m={s["cum_gain_10m"]:>+5.1f}% 5m={s["cum_gain_5m"]:>+5.1f}% up={s["up_ratio"]:.0%} vol_acc={s["vol_accel"]:.0f}x tv10={s["tv_10m"]/1e6:>4.0f}M @{s["price"]}')
+            print(f'             -> {url}')
     else:
         print('  None')
 
     # 로그 저장
-    log_file = f'dual_scan_{datetime.now(KST):%Y-%m-%d}.jsonl'
+    log_file = f'dual_scan_{now:%Y-%m-%d}.jsonl'
     with open(log_file, 'a') as f:
-        ts = datetime.now(KST).isoformat()
-        for s in bursts + graduals:
-            f.write(json.dumps({**s, 'scan_time': ts}) + '\n')
-    if bursts or graduals:
-        print(f'\n  → Logged to {log_file}')
+        ts_str = now.isoformat()
+        for s in bursts + graduals + mediums:
+            f.write(json.dumps({**s, 'scan_time': ts_str}) + '\n')
+    if bursts or graduals or mediums:
+        print(f'\n  -> Logged to {log_file}')
 
 
 if __name__ == '__main__':
