@@ -69,8 +69,13 @@ def main():
 
         if sigs:
             msg['alert'] = True
-            msg['summary'] = f'SIGNAL! {len(sigs)} found: ' + ', '.join(f'{s["type"]}:{s["coin"]}' for s in sigs[:3])
-            # 신호 파일에 즉시 기록 (세션에서 읽을 수 있도록)
+            # 신호 랭킹: R2 + gain 기준 정렬
+            ranked = sorted(sigs, key=lambda s: -(s.get('detail', {}).get('r2', 0) * 100 + s.get('detail', {}).get('gain_30m', s.get('detail', {}).get('cum_gain_10m', 0))), )
+            top = ranked[0]
+            msg['summary'] = f'SIGNAL! {len(sigs)} found. TOP: {top["type"]}:{top["coin"]}@{top["price"]}'
+            msg['top_signal'] = top
+
+            # 신호 파일에 즉시 기록
             with open('signal_alerts.jsonl', 'a', encoding='utf-8') as f:
                 for sig in sigs:
                     alert = {'ts': now.isoformat(), 'type': sig['type'], 'coin': sig['coin'], 'price': sig['price']}
@@ -79,6 +84,19 @@ def main():
                             if k in sig['detail']:
                                 alert[k] = sig['detail'][k]
                     f.write(json.dumps(alert, ensure_ascii=False) + '\n')
+
+            # Type C/D 감지 시 자동 차트 렌더링
+            for sig in ranked[:2]:
+                if sig['type'] in ('C', 'D'):
+                    try:
+                        from chart_render import render_chart
+                        chart_file = render_chart(sig['coin'], 60)
+                        if chart_file:
+                            alert_msg = f"AUTO CHART: {sig['coin']} {sig['type']} R2={sig.get('detail',{}).get('r2','?')} -> {chart_file}"
+                            with open('signal_alerts.jsonl', 'a', encoding='utf-8') as f:
+                                f.write(json.dumps({'ts': now.isoformat(), 'chart': chart_file, 'coin': sig['coin'], 'auto_render': True}) + '\n')
+                    except Exception:
+                        pass
         else:
             msg['summary'] = f'{now:%H:%M} scan 0 signals'
 
