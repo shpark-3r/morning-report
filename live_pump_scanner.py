@@ -122,6 +122,60 @@ def check_burst_signal(candles, strong=False):
     }
 
 
+def check_quiet_gradual(candles):
+    """Type D: Quiet Gradual — 조용한 계단식 우상향 (CFG/MERL/MON 패턴).
+    MA 정배열 + R² 선형 추세 + vol steady + 30분 gain 3~15%.
+    연구원 dual_scanner 구현 동기화 (fa331cf).
+    """
+    if len(candles) < 65:
+        return None
+    i = len(candles) - 1
+    closes_60 = [candles[j][2] for j in range(i - 59, i + 1)]
+    closes_30 = closes_60[30:]
+    closes_15 = closes_60[45:]
+    closes_5 = closes_60[55:]
+    ma5 = sum(closes_5) / 5
+    ma15 = sum(closes_15) / 15
+    ma60 = sum(closes_60) / 60
+    if not (ma5 > ma15 > ma60):
+        return None
+    closes_5_prev = closes_60[50:55]
+    ma5_prev = sum(closes_5_prev) / 5
+    if ma5 <= ma5_prev:
+        return None
+    n = len(closes_30)
+    x_mean = (n - 1) / 2
+    y_mean = sum(closes_30) / n
+    ss_xy = sum((j - x_mean) * (closes_30[j] - y_mean) for j in range(n))
+    ss_xx = sum((j - x_mean) ** 2 for j in range(n))
+    ss_yy = sum((closes_30[j] - y_mean) ** 2 for j in range(n))
+    if ss_xx == 0 or ss_yy == 0:
+        return None
+    r2 = (ss_xy ** 2) / (ss_xx * ss_yy)
+    if r2 < 0.65:
+        return None
+    gain_30 = (closes_30[-1] - closes_30[0]) / closes_30[0] * 100 if closes_30[0] > 0 else 0
+    if gain_30 < 3 or gain_30 > 20:
+        return None
+    vol_recent = sum(candles[j][5] for j in range(i - 9, i + 1)) / 10
+    vol_base = sum(candles[j][5] for j in range(i - 59, i - 9)) / 50 if i >= 59 else 0
+    vol_ratio = vol_recent / vol_base if vol_base > 0 else 0
+    if vol_ratio < 1.2 or vol_ratio > 15:
+        return None
+    tv_30 = sum(candles[j][2] * candles[j][5] for j in range(i - 29, i + 1))
+    if tv_30 < 50e6:
+        return None
+    return {
+        'ts': candles[i][0],
+        'price': candles[i][2],
+        'r2': r2,
+        'gain_30m': gain_30,
+        'vol_ratio': vol_ratio,
+        'tv_30m': tv_30,
+        'mode': 'quiet_gradual',
+    }
+
+
 def check_medium_signal(candles):
     """Q-30: Medium speed signal (10분 누적 가속).
     PCI/JOE 같은 점진 가속형: 단봉 +5% 안 넘지만 10분 +7%.
@@ -288,9 +342,12 @@ def scan(strict=False, fp_filter=False, burst=False, strong=False):
             continue
         if burst:
             sig = check_burst_signal(candles, strong=strong)
-            # Q-30: burst 못 잡으면 medium speed도 체크 (PCI 같은 점진 가속)
+            # Q-30: burst 못 잡으면 medium speed도 체크
             if sig is None:
                 sig = check_medium_signal(candles)
+            # Type D: quiet gradual (CFG/MERL/MON 패턴)
+            if sig is None:
+                sig = check_quiet_gradual(candles)
         else:
             sig = check_signal(candles, strict=strict, fp_filter=fp_filter)
         if sig:
@@ -305,8 +362,12 @@ def scan(strict=False, fp_filter=False, burst=False, strong=False):
             for s in signals:
                 dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
                 chart_url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
-                if s.get('mode') == 'medium':
-                    # Q-30 Type C medium speed
+                if s.get('mode') == 'quiet_gradual':
+                    print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
+                          f'R2={s["r2"]:.2f} 30m={s["gain_30m"]:>+5.1f}% '
+                          f'vol={s["vol_ratio"]:.1f}x tv30={s["tv_30m"]/1e6:>4.0f}M '
+                          f'price={s["price"]} *** QUIET GRADUAL ***')
+                elif s.get('mode') == 'medium':
                     print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
                           f'10m_gain={s["cum_gain"]:>+5.1f}% vol_r={s["vol_ratio"]:>5.1f}x '
                           f'up={s["up_ratio"]:.0%} tv10={s["tv_10min"]/1e6:>4.0f}M '

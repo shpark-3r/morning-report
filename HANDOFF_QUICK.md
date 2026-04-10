@@ -61,15 +61,35 @@ python live_pump_scanner.py --burst --strong      # 더 strict (vol≥30x, EV +1
 
 **실측 슬리피지 (Q-18, n=2)**: 매수 slip ≈ 1.07% (기존 가정 0.3%의 3.6배). net EV ≈ 0. 전액 진입은 슬리피지 추가 훼손 → 사이즈 작을수록 유리.
 
+## 🔥 손실 최소화 10원칙 (Q-28, 4/10 12:46)
+
+1. **BE 룰 제거** — `be_enabled=false` default. Hard SL만 신뢰.
+2. **Hard SL tight + hold** — SL -3~5% (점진형은 -4~5% wider). 이동 금지.
+3. **Trailing stop wide** — 점진형은 **drop 3%** (1.5%는 너무 tight, CFG 교훈).
+4. **부분 익절** — TP1 절반, TP2 1/3, 나머지 trail.
+5. **시간 기반 청산 금지** — "5분 안에 +2%" 같은 시간 조건 X. **신호 기반 출구만**.
+6. **패턴 기반 출구** — 음봉 3연속, vol dying, MA15 깨짐 → 매도.
+7. **사용자 override 우선** — `user_override: "HOLD"/"EXIT"` positions.json 필드.
+8. **chop 차단** — `is_chop()` 필터. NOM 같은 fake accumulation 자동 차단.
+9. **상폐 코인 3% 이하** — 24h peak 돌파 + vol 10M burst 시만. 도박 영역.
+10. **역추세 매수 금지** — 1분봉 -4% dump에 매수 X. trend pullback만 허용.
+
+## 🔥 차트 시각 판독 필수 + Quiet Gradual 감시
+
+- **burst만 감시 X** — 조용한 계단식 증강(CFG/MERL/MON)도 반드시 탐지
+- `chart_snapshot.py` PNG → Read tool 이미지 인식 → 시각 패턴 판독
+- **진입 전 반드시 차트 1장 이상 판독** (숫자 데이터만으로 결정 금지)
+- live_pump_scanner에 Type D (quiet_gradual) 구현됨: MA정배열 + R²>0.65 + gain 3~20%
+
 ## 절대 금지
 
-1. ❌ 이전 메모리 "EV +0.90%" 신뢰 — 재현 시 -1.53% (낙관 가정 차이)
-2. ❌ "EV +6.10% (n=10)" 라이브 EV로 추정 — cherry pick 위험
-3. ❌ **봇 자동 매매 20% 초과** — Q-22 Kelly 6배 over-betting 경고. 사용자 'ALLIN' 없이는 절대 X.
-4. ❌ **"22~01시 전액 베팅" 같은 시간대 기반 전액 권고** — 이전 워커 실수. Kelly 기반 10~15% 범위 초과 금지.
-5. ❌ "더 강한 돌파로 갈아타기" (swap) — NOM→GRND swap 연쇄 손실 사례. 포지션 교체는 추가 손실 지뢰.
-6. ❌ TRAC/XTER 1~2분 폭발 타입 시간 낭비
-7. ❌ chop 종목 진입 — NOM 같은 6h 약한 추세 + 높은 양봉비율. `is_chop()` 필터 필수.
+1. ❌ **봇 자동 매매 20% 초과** — Q-22 Kelly 6배 over-betting 경고.
+2. ❌ **시간대 기반 전액 권고** — 이전 워커 실수.
+3. ❌ **swap (포지션 교체)** — NOM→GRND 연쇄 손실.
+4. ❌ **TRAC/XTER 1~2분 폭발 타입** — 시간 낭비.
+5. ❌ **chop 종목 진입** — `is_chop()` 필터 필수.
+6. ❌ **차트 안 보고 진입** — 숫자만 보면 fakeout 놓침.
+7. ❌ **trail 1.5% (점진형)** — 점진 대장은 3%+ wide 필수.
 
 ## 협업 (연구원 ↔ 워커)
 
