@@ -21,13 +21,31 @@ def run_once():
     coins = load_coins()
     candidates = quick_filter(coins)
 
-    accum = [c for c in candidates if c.get('accumulation')]
-    movers = [c for c in candidates if not c.get('accumulation')]
+    stairs = [c for c in candidates if c.get('staircase')]
+    accum = [c for c in candidates if c.get('accumulation') and not c.get('staircase')]
+    movers = [c for c in candidates if not c.get('accumulation') and not c.get('staircase')]
 
     lines = []
-    lines.append(f'[{now:%H:%M:%S}] scan={len(coins)} candidates={len(candidates)} accum={len(accum)}')
+    lines.append(f'[{now:%H:%M:%S}] scan={len(coins)} candidates={len(candidates)} stair={len(stairs)} accum={len(accum)}')
 
-    # 매집 신호 — 최우선
+    # 계단식 양봉 — 최우선 (초기 진입 신호)
+    if stairs:
+        lines.append(f'*** STAIRCASE ({len(stairs)}) — consecutive green bars ***')
+        for c in stairs:
+            lines.append(f'  >>> {c["coin"]:>10} @{c["price"]:>12,.0f}  '
+                         f'{c["consec_pos"]}bars  vol={c["vol_ratio"]:.0f}x  tv10={c["tv_10m"]/1e6:.0f}M  '
+                         f'chg10={c["chg_10m"]:+.1f}%  fH={c["from_high"]:+.1f}%')
+            chart = render_scan_chart(c['coin'], 120)
+            if chart:
+                lines.append(f'       CHART: {chart}')
+            with open(ALERT_FILE, 'a', encoding='utf-8') as f:
+                f.write(json.dumps({
+                    'ts': now.isoformat(), 'type': 'STAIR',
+                    'coin': c['coin'], 'price': c['price'],
+                    'consec_pos': c['consec_pos'], 'tv_10m': c['tv_10m'],
+                }, ensure_ascii=False) + '\n')
+
+    # 매집 신호
     if accum:
         lines.append(f'*** ACCUMULATION ({len(accum)}) ***')
         for c in accum:

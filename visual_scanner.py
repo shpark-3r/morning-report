@@ -114,10 +114,24 @@ def quick_filter(coins):
         # tv_10m >= 30M 필터로 잡코인 제외
         is_accumulation = (chg_10m < 1.5 and vol_ratio >= 8 and tv_10m >= 30_000_000)
 
+        # 양봉 5연속 감지: 계단식 점진 상승의 핵심 신호
+        # 기울기 무관 — 양봉 5개 연속이면 잡음
+        consec_pos = 0
+        for j in range(i, max(i - 10, -1), -1):
+            if candles[j][2] > candles[j][1]:  # close > open = 양봉
+                consec_pos += 1
+            else:
+                break
+        is_staircase = (consec_pos >= 5 and tv_10m >= 3_000_000)
+
         hit = False
         reason = []
         priority = 0  # 낮을수록 우선
 
+        if is_staircase:
+            hit = True
+            reason.append(f'STAIR {consec_pos}bars')
+            priority = 0  # 최우선 — 계단식 상승 초기
         if is_accumulation:
             hit = True
             reason.append(f'ACCUM vol {vol_ratio:.0f}x price flat')
@@ -147,6 +161,8 @@ def quick_filter(coins):
                 'reason': ', '.join(reason),
                 'priority': priority,
                 'accumulation': is_accumulation,
+                'staircase': is_staircase,
+                'consec_pos': consec_pos,
             })
 
         time.sleep(0.05)
