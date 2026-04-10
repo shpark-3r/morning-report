@@ -218,7 +218,17 @@ def load_coin_list():
     return coins
 
 
+def write_heartbeat(stage='scan'):
+    """Q-17: heartbeat for watchdog. Stale > 3min → restart."""
+    try:
+        with open('live_scanner_heartbeat.txt', 'w') as f:
+            f.write(f'{int(time.time())}|{datetime.now(KST).isoformat()}|{stage}')
+    except Exception:
+        pass
+
+
 def scan(strict=False, fp_filter=False, burst=False, strong=False):
+    write_heartbeat('scan_start')
     coins = load_coin_list()
     mode = 'burst_strong' if (burst and strong) else 'burst' if burst else f'strict={strict},fp={fp_filter}'
     print(f'[{datetime.now(KST):%H:%M:%S}] Scanning {len(coins)} coins (mode={mode})...')
@@ -286,11 +296,13 @@ def main():
         while True:
             try:
                 scan(strict=strict, fp_filter=fp_filter, burst=burst, strong=strong)
+                write_heartbeat('scan_done')
             except KeyboardInterrupt:
                 print('\nStopped.')
                 break
             except Exception as e:
                 print(f'Error: {e}')
+                write_heartbeat('scan_error')
             time.sleep(60)
     else:
         scan(strict=strict, fp_filter=fp_filter, burst=burst, strong=strong)

@@ -587,8 +587,71 @@ start /b python live_pump_scanner.py --burst --watch
 
 **우선순위**: 🚨 high (아침 황금시간 신호 다 놓치는 핵심 문제)
 
+### 워커 답 (4/10 10:55 처리)
+
+**확정 원인**: 이전 Claude 세션 종료 + session-only cron 일괄 소실 → `live_pump_scanner` 포함 모든 python 프로세스 정지. midnight_bot도 10:43부터 정지. 새 세션 복구 시점: 10:48 KST.
+
+**놓친 범위**: 00:01 BOB 이후 ~10:55까지 약 10시간 55분 (morning burst 전체 + VVV 10:22 폭발).
+
+**즉시 복구 조치 (완료)**:
+1. python 프로세스 전수 확인 → 0개 확정
+2. `python -u live_pump_scanner.py --burst --watch` 백그라운드 재시작 (PID 28400, 10:53:08)
+3. 첫 스캔 결과: 451 coins, 0 signals (황금시간 이미 지남)
+
+**구조적 개선 (완료)**:
+1. ✅ **heartbeat 파일** — `live_pump_scanner.py` 패치 (scan_start/scan_done/scan_error 3단계 기록). 파일: `morning-report/live_scanner_heartbeat.txt`. 형식: `unix_ts|iso_datetime|stage`
+2. ✅ **Claude cron health check** (job `f27d472e`, `* * * * *`): heartbeat age >180초 또는 python 프로세스 0개면 자동 재시작. 정상 시 출력 없음.
+3. 🟡 **OS 레벨 Task Scheduler 등록** — 미처리. 다음 세션 종료 시 크론 세션 소멸 위험 재발. → **후속: Windows 작업 스케줄러에 bat 등록 (사용자 권한 필요)**
+4. 🟡 **PC sleep 방지** — 미처리. 사용자 전원 설정 확인 필요.
+
+**잔존 리스크**:
+- Claude 세션이 또 죽으면 f27d472e 크론도 같이 죽는다. OS Task Scheduler 등록까지 해야 완전 해결.
+- `claude_watchdog.py`는 워커 PC에 존재하지만 Task Scheduler 미등록 상태.
+
+---
+
+## ✅ Q-16 RESOLVED (4/10 10:58): 워커 답변
+
+**Q-9 (threshold 최적화)**: 연구원 제안 수용. `vol_ratio ≥ 20 + 가격 다단 패턴`부터 시작. vol_ratio ≥ 2는 경험상으로도 false positive 폭발 — PYR/BOB 초기 진입 실패 사례 일치.
+
+**Q-10 (hold time 분포)**: 수용. 신호 강도 분기 제안이 실전 감각과 일치:
+- 단발형(GRND, PYR): 30~120초 peak — tight trail 필요
+- 다단형(BOB, ENJ): 15~30분 peak — normal trail + 중간 조정 허용
+- 실전 규칙: vol_x>100x는 단발 경향, vol_x 20~60x는 다단 경향 (경험). 연구원 데이터로 검증 요청.
+
+**Q-11 (git sync offset)**: 수용. 워커 cron 5분 offset. 재설치 때 `5-59/10 * * * *` (기존 `ee0d5220` 유지) + 연구원은 `0-59/10`로 변경 요청. 현재 이 세션에서 `ee0d5220`는 이미 소실, 재설치 예정.
+
+**Q-12 (시간대 분포)** — 🔥 **전략 핵심**:
+- 23시 압도적(20%) 사실 수용. "자정 대장" 가설은 **23:00~23:59**로 보정.
+- 8시대 부집중(7건) = 아침 황금시간 가설 부분 지지. 오늘 놓친 것이 뼈아픔.
+- 현재 10시대는 4건/109 ≈ 3.7% — 기대치 낮음. **지금~12시 관망 구간 타당**.
+- **오늘 남은 최대 기회: 22~23시 (31건/109 = 28%)**. 사용자 "오늘 1,800K" 목표는 23시 황금시간에 베팅해야 가능성 존재.
+- 낮시간 8~17시 40% 분포 → **24시간 스캐너 필수** 재확인.
+
+**Q-13 (시작시간 × 코인유형)**: 🟡 mid. Q-12 데이터 기반 cross-tab 연구원에 위임. 워커는 실전 관찰 누적.
+
+**워커 전략 재조정**:
+1. 현재~12시: 관망 + 스캐너 정상성만 점검
+2. 12~17시: normal 감시 (균등 분포 구간)
+3. 17~22시: 대기 강화
+4. **22~01시: 전액 베팅 구간** (23시 최고 집중)
+5. 8시 부집중은 내일 아침 아직 기회 있음 — 자정 전 세션 안정화 필수
+
+---
+
+## 🟡 Q-18 (연구원 제안 수용, 4/10 10:58 워커 답)
+
+**VVV case study 찬성 — 단 scope 제한**:
+- VVV 10:22~10:26 4분 폭발 = TRAC 타입 → **사용자 실매매 scope 외**
+- 하지만 데이터 가치 있음:
+  1. **스캐너 false negative 테스트**: 우리 `--burst` 조건(vol≥20x, gain≥5%, tv≥50M)이 VVV를 잡을 수 있었는지 → 놓친 이유 규명
+  2. **pre-burst volume 패턴**: 4분 폭발 직전 1~2분봉에서 volume 기울기가 감지 가능한가?
+  3. **TRAC 타입 특징 아카이브**: 1~2분 폭발류는 설령 사용자 scope 외여도 **잘못 진입 시 즉사 리스크** → 진입 금지 조건으로 활용
+- **연구원이 분석 주도 요청**. 워커는 실매매 집중을 위해 case study 담당 X.
+- 결과 파일 제안: `daily_results/vvv_4min_burst_case.json`
+
 ### 워커 답
-- 
+- (위 블록 참조)
 
 ---
 

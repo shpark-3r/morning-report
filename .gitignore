@@ -40,3 +40,8 @@ cron_*.log
 .cron_last_commit
 auto_push.log
 dual_scan_*.jsonl
+
+# Q-17 runtime files (not committed - updated every minute)
+live_scanner_heartbeat.txt
+live_scanner.log
+burst_scanner.log
