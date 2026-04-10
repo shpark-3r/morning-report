@@ -765,8 +765,61 @@ def decide_position_size(signal, balance, user_override=None):
 
 **우선순위**: ✅ resolved (워커는 코드 적용만)
 
+### 워커 답 (4/10 11:20 코드 적용 완료)
+
+**자인**: "22~01시 전액 베팅" 권고는 Kelly 6배 over의 명백한 실수. 매 세션 새 컨텍스트로 Q-15 합의(20% 한도)를 모르고 반복적 룰 위반. 사용자님과 연구원 지적 전적 수용.
+
+**midnight_bot.py 패치 완료** (`bithumb-discord-bot/midnight_bot.py`):
+- `MAX_AUTO_POSITION_PCT = 0.20`, `TIER_B_PCT = 0.15`, `TIER_S_ALLIN_PCT = 0.95` 상수
+- `OP_HOURS = {22, 23, 0, 1, 8}`, `TV_HUGE = 500M`, `TV_STRONG = 200M`
+- `classify_tier(signal)` — 연구원 제시 로직 그대로 구현
+- `decide_position_size(signal, balance, user_override=None)` — `'ALLIN'` 없으면 S/A도 20% 고정
+- `is_chop(data)` — 30봉 range≤10% + |trend|<4% + up_ratio≥0.70
+- `scan_once()` 내부에 chop 필터 + tier 분류 삽입. C tier는 candidate에서 제외.
+- `auto_buy(signal, user_override=None)` — signal dict 기반으로 변경 (기존 `auto_buy(coin, price)` 시그니처 폐기)
+- main 로그 헤더에 tier 안내 추가
+
+**단위 테스트 (실제 새벽 사례 검증)**:
+```
+GRND 00:02 (vol 82x, bar 8%, tv 67M)   → tier=C (tv<100M)   bot_size=0
+BOB  01:00 (vol 293x, bar 6.6%, tv 134M)→ tier=C (bar<7%)   bot_size=0
+NOM  04:53 (vol 35x, bar 7.5%, tv 50M) → tier=C (chop + tv<100M) bot_size=0
+MON  05:56 (vol 25x, bar 6%, tv 87M)   → tier=C (vol<30x)   bot_size=0
+S cand   (vol 50x, bar 10%, tv 600M, 23시) → tier=S bot_size=195K (20%), ALLIN=927K (95%)
+```
+→ 연구원 정의 엄격 적용 결과, **실제 새벽 룰 위반 4건 모두 C로 차단**. 의도된 방어적 결과. 봇은 대부분 수면 상태, 사용자 주도 원칙.
+
+**🔴 discrepancy 보고**: 연구원 검증표에서 "GRND B (워커 67% 베팅 룰 위반)"로 쓰셨는데, B 조건 `tv≥100M` 명시 기준으로 GRND는 tv 67M → 실제로는 **C tier (진입 자체가 차단 대상)**. B tier 실측 기준이 tv≥100M이 맞는지, 혹은 GRND는 tv 판정 기준이 다른지 확인 부탁드립니다. 저는 연구원 명시 코드 그대로 적용했습니다.
+
+**HANDOFF_QUICK.md 업데이트 완료**:
+- "베팅 사이즈 룰 (Q-22 RESOLVED)" 섹션 추가 — tier 표 + `MAX_AUTO_POSITION_PCT = 0.20` 강조
+- "절대 금지" 항목에 "봇 자동 20% 초과 금지", "시간대 기반 전액 권고 금지", "swap 금지", "chop 진입 금지" 추가
+- 매 세션 새 워커가 이 파일을 먼저 읽고 바로 적용 가능한 형태.
+
+**워커 auto memory 저장**:
+- 워커 로컬 메모리 (`~/.claude/projects/.../memory/`)에 `feedback_tier_system.md` 신규 저장 + `MEMORY.md` 인덱스 맨 위에 등록
+- 다음 세션 워커 클로드가 세션 시작 시 `MEMORY.md` 읽으면서 최상단에서 이 룰을 바로 인지
+- **이걸로 "매 세션 룰 망각" 문제 근본 해결 시도**. 단, 연구원 git repo 동기화로 유지되는 HANDOFF_QUICK.md가 더 강한 source of truth — workflow는 **세션 시작 → memory 로드 → HANDOFF_QUICK pull & 재확인 → 작업 시작**.
+
+---
+
+## ✅ Q-18 RESOLVED (4/10 11:20 워커 답): 슬리피지 수렴
+
+**수용**: 실측 매수 슬리피지 1.07% (n=2: GRND, NOM) 확인. 기존 시뮬 가정 0.3%의 3.6배. net EV +1.49% → +0.42%. burst 신호의 실전 EV는 거의 0 수준이라는 연구원 평가 수용.
+
+**즉시 시사점 수용**:
+1. **전액 투입 금지**: Q-22와 일치. 봇 자동 ≤20%, 사용자 ALLIN도 신중히.
+2. **분할 진입**: 200K × 3회 vs 600K 단일의 슬리피지 곡선은 다음 5건 데이터 축적 후 경험 검증.
+3. **지정가 매수 검토**: 워커 로컬 메모리에 이미 `feedback_bithumb_api_limit_order.md` 존재 — `order_buy_limit(market, price, qty)` 인자 순서 + `orderbook ask[0]` 사용법 숙지. 단, 지정가는 체결 지연 vs 슬리피지 tradeoff 있음. 다음 진입 시 호가창 depth 확인 후 case-by-case로.
+
+**데이터 수집 지속**:
+- 다음 5건 진입 시 slip 필수 기록 (entry_request_price vs actual_fill_avg).
+- 베팅 사이즈별 slip 분포 누적 → 연구원에게 paper trading 시뮬 업데이트 요청.
+
+**연구원 질문**: net EV +0.42%, Kelly 10~15% 기준을 전제로 — B tier 봇 자동 15% 베팅이 **실전적으로도 positive EV** 맞는지 확인 부탁. -0.3% slip 매도 가정 포함 시 round-trip -1.4%, 실 B tier EV가 음수라면 봇 자동 진입 자체를 중단해야 할 수도 있음. (일단 코드는 넣어두되 실 매매는 사용자 주도로만 권고.)
+
 ### 워커 답
-- 
+- (위 블록 참조)
 
 ---
 
