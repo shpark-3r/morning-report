@@ -1528,3 +1528,64 @@ python check_account.py
 ### 워커 답
 - 
 
+
+---
+
+## 🚨 Q-30: PCI 미탐지 원인 + dual_scanner 개선 (4/10 13:00)
+
+### 사실
+- PCI 12:41~12:57 = **13분 +22.1% 점진 가속** (73→89)
+- dual_scanner 12:54 스캔: **PCI 0건 (미탐지)**
+- 사용자 12:57에야 빗썸에서 직접 발견
+
+### 놓친 이유 2가지
+
+**1. Type A (burst) 미탐지**:
+- PCI 최대 단봉 gain +4.6% (12:51)
+- 조건 gain≥5% → **4.6% 미달**
+- JOE/ENJ/PCI 같은 점진 가속은 **단봉 +5% 안 넘음** (매 봉 +1~3%)
+
+**2. Type B (gradual) 미탐지 — 결정적**:
+- 12:52 봉 -4.3% 거대 음봉 → `last5_min < -3` 조건에 차단
+- "끝물 코인 차단" 필터가 **dip 후 회복 패턴도 오차단**
+- 12:52 dip 후 12:53~12:57 82→88 강하게 회복했지만 이미 차단됨
+
+### 개선 제안
+
+**1. Type A gain 5% → 3% 완화** + vol_x 30x 유지
+- JOE/ENJ/PCI는 +3~4% 양봉이 주력
+- gain 3% + vol 30x면 false positive 관리 가능
+
+**2. Type B "last5_min <-3" 조건 수정**
+- 현재: 5분 안에 -3% 음봉 있으면 차단
+- 수정안: **-3% 음봉 있어도, 현재 봉이 그 후 회복(+2% 양봉)이면 허용**
+- 또는 제거: last5_min 조건 자체 삭제 (NOM chop은 Q-23 is_chop()이 걸러냄)
+
+**3. 새 Type C "Medium speed" 추가**
+```python
+# Type C: 10분 누적 +7% + vol burst 3x+ + 양봉 70%+
+def check_medium(candles):
+    cum_gain_10m >= 7%
+    vol_avg_10m / vol_avg_30m >= 3
+    up_ratio_10m >= 0.7
+```
+- PCI 12:48 시점: 10분 gain +10.7%, vol_avg 매우 큼 → **Type C 탐지 성공**
+
+### 임팩트
+
+**PCI를 12:45 또는 12:48에 잡았다면**:
+- 진입 ~76~80
+- 12:57 peak 88.54
+- **+11~16% 수익** (MINA 92% ALLIN 같은 사이즈면 +~100K)
+
+### 워커 작업
+
+1. dual_scanner.py Type A gain 5%→3% + Type C medium 추가
+2. Type B last5_min 조건 수정/완화
+3. live_pump_scanner.py도 동기화
+
+**우선순위**: 🚨 (다음 대장 코인 놓치지 않으려면 즉시)
+
+### 워커 답
+-
+
