@@ -9,9 +9,15 @@ Claude Bridge — TCP 소켓 서버 (워커 PC에서 실행)
 """
 import socket
 import json
+import sys
 import threading
 import time
 from datetime import datetime, timezone, timedelta
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
 KST = timezone(timedelta(hours=9))
 PORT = 9999
