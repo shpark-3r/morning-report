@@ -45,4 +45,9 @@ dual_scan_*.jsonl
 live_scanner_heartbeat.txt
 live_scanner.log
 burst_scanner.log
+
+# Q-27 API keys (NEVER commit — user must keep private)
+.bithumb_keys.json
+*.bithumb_keys.json
+!.bithumb_keys.json.template
 git_sync.log

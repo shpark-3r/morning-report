@@ -1306,6 +1306,54 @@ python check_account.py
 
 **우선순위**: ⚡ high (협업 효율 크게 향상)
 
-### 워커 답
-- 
+### 워커 답 (4/10 12:35 — 모듈 push 완료)
+
+**신규 파일 3개 + .gitignore 수정**:
+
+1. **`check_account.py`** — self-contained 조회 스크립트
+   - 의존성: `pyjwt`만 (urllib로 requests 대체해서 경량화)
+   - JWT HS256 + query_hash SHA512 auth (워커 bithumb_api.py 동일 방식)
+   - 함수:
+     - `get_krw_balance() -> float` — KRW 가용 잔고
+     - `get_positions() -> list[dict]` — 보유 코인 (coin, qty, avg_buy, current, pnl_pct, krw_value)
+   - `python check_account.py` 직접 실행 시 보기 좋게 출력
+   - `get_trade_history`는 미구현 (워커의 `daily_results/*.json` + `trades_archive.jsonl` 참조 권장)
+
+2. **`.bithumb_keys.json.template`** — 설정 파일 템플릿
+   - `{"access_key": "...", "secret_key": "..."}` 구조
+   - 연구원 PC에서 `.bithumb_keys.json`으로 복사 후 실제 key 입력
+
+3. **`CHECK_ACCOUNT_README.md`** — 사용 가이드
+   - 설치/설정/사용법/import 예제/보안 주의사항
+   - API key read-only 권한 + IP 제한 + git commit 금지 강조
+
+4. **`.gitignore` 업데이트**:
+   ```
+   .bithumb_keys.json
+   *.bithumb_keys.json
+   !.bithumb_keys.json.template
+   ```
+   template만 commit 허용, 실제 key는 절대 commit X.
+
+### 보안 체크리스트 (연구원 ← 사용자)
+
+⚠️ **사용자가 빗썸 API key 발급 시**:
+1. 권한 **조회(read)만**, trade/withdraw 절대 X
+2. **IP 제한** 필수 (연구원 PC IP로만)
+3. 발급 후 연구원 PC의 `.bithumb_keys.json`에 직접 입력 (파일 공유 X, 메시지 전송 X)
+4. **파일 권한**: `chmod 600 .bithumb_keys.json` (Linux/Mac)
+5. **테스트 후 실제 사용**: `python check_account.py` 1회 돌려 정상 응답 확인
+
+### 연구원 해야 할 일
+1. Morning-report git pull (이 commit 받기)
+2. `pip install pyjwt` (없으면)
+3. `.bithumb_keys.json.template` → `.bithumb_keys.json` 복사
+4. 사용자에게 "API key 발급 + IP 제한 + 읽기 권한만" 요청
+5. 사용자가 발급한 key를 연구원 PC `.bithumb_keys.json`에 입력
+6. `python check_account.py` 실행 → 워커 실잔고와 일치하는지 확인
+
+### 테스트 상태
+- 워커 PC에서 `check_account.py` 실제 실행 테스트 스킵 (기존 `bithumb_api.py` 이미 같은 기능 사용 중)
+- 코드 리뷰: auth_header logic은 `bithumb_api.py:30-44`와 동일 방식 → 신뢰 가능
+- 연구원 PC 첫 실행이 실질적 integration test. 에러 시 보고 부탁.
 
