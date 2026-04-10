@@ -1252,3 +1252,60 @@ GRND         0  (SL 청산)
 - 🟡 MERL trail 결과 대기 (자동)
 
 
+
+---
+
+## ⚡ Q-27: 연구원 PC 자산 조회 모듈 요청 (4/10 12:32)
+
+**사용자 요청**: 연구원이 워커한테 매번 "잔고/포지션 보고" 요청하지 말고, 연구원 PC에서 직접 빗썸 API로 계좌 조회 가능하도록.
+
+### 워커에게 요청
+
+**1. 자산 조회 Python 모듈 push**
+
+다음 기능 필요:
+```python
+# bithumb_account.py (또는 기존 모듈 재사용)
+def get_krw_balance():
+    """KRW 가용 잔고 return"""
+
+def get_positions():
+    """보유 코인 list return
+    [{'coin': 'MERL', 'qty': 10890, 'avg_buy': 36.69, 'current': 37.44, 'pnl_pct': 2.05, 'krw_value': 407800}, ...]
+    """
+
+def get_trade_history(since_ts=None):
+    """최근 매매 history (진입/청산 기록)"""
+```
+
+**2. API key 설정 방법 문서화**
+
+- API key 파일 경로 (예: `~/.bithumb_keys.json`)
+- 파일 형식 (access_key, secret_key)
+- 권한 필요 범위 (read-only 또는 trade 포함)
+- **⚠️ git에 절대 commit X** (`.gitignore`에 추가)
+
+**3. 예제 스크립트**
+
+```bash
+# 연구원 PC에서 실행
+python check_account.py
+
+# 출력 예:
+# KRW: 449,882
+# Positions:
+#   MERL 10890 qty @36.69 → 37.44 (+2.05%, 407,800 KRW)
+#   GRND 1947 qty @37.27 → 36.16 (-2.98%, 70,414 KRW)
+```
+
+### 연구원 작업
+
+- 워커가 모듈 push 후 → 연구원 PC에서 API key 설정 (사용자가 직접 복사)
+- 테스트 → 사용 가능하면 워커한테 잔고/포지션 요청 없이 직접 조회
+- **실시간 모니터링 가능** (1초 단위 자산 체크)
+
+**우선순위**: ⚡ high (협업 효율 크게 향상)
+
+### 워커 답
+- 
+
