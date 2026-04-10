@@ -181,6 +181,74 @@ def check_medium(candles):
     }
 
 
+def check_quiet_gradual(candles):
+    """Type D: Quiet Gradual — 조용한 계단식 우상향 (CFG/MERL/MON 패턴)
+    MA 정배열 + R^2 선형 추세 + vol steady + 30분 gain 3~15%
+    """
+    if len(candles) < 65:
+        return None
+    i = len(candles) - 1
+
+    # close 배열
+    closes_60 = [candles[j][2] for j in range(i - 59, i + 1)]
+    closes_30 = closes_60[30:]
+    closes_15 = closes_60[45:]
+    closes_5 = closes_60[55:]
+
+    # 1. MA 정배열 (MA5 > MA15 > MA60)
+    ma5 = sum(closes_5) / 5
+    ma15 = sum(closes_15) / 15
+    ma60 = sum(closes_60) / 60
+    if not (ma5 > ma15 > ma60):
+        return None
+    # MA 기울기 양수 확인 (ma5 > 5분전 ma5)
+    closes_5_prev = closes_60[50:55]
+    ma5_prev = sum(closes_5_prev) / 5
+    if ma5 <= ma5_prev:
+        return None
+
+    # 2. R^2 (30분 close의 선형 회귀 적합도)
+    n = len(closes_30)
+    x_mean = (n - 1) / 2
+    y_mean = sum(closes_30) / n
+    ss_xy = sum((j - x_mean) * (closes_30[j] - y_mean) for j in range(n))
+    ss_xx = sum((j - x_mean) ** 2 for j in range(n))
+    ss_yy = sum((closes_30[j] - y_mean) ** 2 for j in range(n))
+    if ss_xx == 0 or ss_yy == 0:
+        return None
+    r2 = (ss_xy ** 2) / (ss_xx * ss_yy)
+    if r2 < 0.65:
+        return None
+
+    # 3. 30분 gain 3~20%
+    gain_30 = (closes_30[-1] - closes_30[0]) / closes_30[0] * 100 if closes_30[0] > 0 else 0
+    if gain_30 < 3 or gain_30 > 20:
+        return None
+
+    # 4. vol steady (1.5~10x, burst 아닌 꾸준한 증가)
+    vol_recent = sum(candles[j][5] for j in range(i - 9, i + 1)) / 10
+    vol_base = sum(candles[j][5] for j in range(i - 59, i - 9)) / 50 if i >= 59 else 0
+    vol_ratio = vol_recent / vol_base if vol_base > 0 else 0
+    if vol_ratio < 1.2 or vol_ratio > 15:
+        return None
+
+    # 5. tv 30분 누적 >= 50M (최소 거래)
+    tv_30 = sum(candles[j][2] * candles[j][5] for j in range(i - 29, i + 1))
+    if tv_30 < 50e6:
+        return None
+
+    return {
+        'type': 'QUIET_GRADUAL',
+        'ts': candles[i][0],
+        'price': candles[i][2],
+        'r2': r2,
+        'gain_30m': gain_30,
+        'ma_alignment': f'{ma5:.2f}>{ma15:.2f}>{ma60:.2f}',
+        'vol_ratio': vol_ratio,
+        'tv_30m': tv_30,
+    }
+
+
 def load_coins():
     fp = 'bithumb_coins.json'
     try:
@@ -208,6 +276,7 @@ def main():
     bursts = []
     graduals = []
     mediums = []
+    quiets = []
 
     for i, coin in enumerate(coins, 1):
         raw = fetch_candles(coin, '1m')
@@ -225,6 +294,9 @@ def main():
         m = check_medium(candles)
         if m:
             mediums.append({**m, 'coin': coin})
+        q = check_quiet_gradual(candles)
+        if q:
+            quiets.append({**q, 'coin': coin})
         time.sleep(0.08)
 
     print(f'\n=== TYPE A (BURST): {len(bursts)} signals ===')
@@ -258,13 +330,25 @@ def main():
     else:
         print('  None')
 
+    print(f'\n=== TYPE D (QUIET GRADUAL): {len(quiets)} signals ===')
+    if quiets:
+        quiets.sort(key=lambda s: -s['r2'])
+        for s in quiets:
+            dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
+            url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
+            print(f'  [{dt:%H:%M}] {s["coin"]:>10} R2={s["r2"]:.2f} 30m={s["gain_30m"]:>+5.1f}% vol={s["vol_ratio"]:.1f}x tv30={s["tv_30m"]/1e6:>4.0f}M @{s["price"]}')
+            print(f'             MA: {s["ma_alignment"]}')
+            print(f'             -> {url}')
+    else:
+        print('  None')
+
     # 로그 저장
     log_file = f'dual_scan_{now:%Y-%m-%d}.jsonl'
     with open(log_file, 'a') as f:
         ts_str = now.isoformat()
-        for s in bursts + graduals + mediums:
+        for s in bursts + graduals + mediums + quiets:
             f.write(json.dumps({**s, 'scan_time': ts_str}) + '\n')
-    if bursts or graduals or mediums:
+    if bursts or graduals or mediums or quiets:
         print(f'\n  -> Logged to {log_file}')
 
 
