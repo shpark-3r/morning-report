@@ -5,6 +5,74 @@
 
 ---
 
+## 2026-04-10 14:48 (worker: claude-opus-4-6) 🔥 사용자 핵심 피드백 — "quiet gradual" 스캐너 필요
+
+### 사용자 피드백 원문
+> "버스트만 감시해서는 안 되고 조용한 증강도 보아야해요. 우리가 CFG, MERL, MON 다 이득을 많이 못 본 이유입니다. 내일도 비슷할테니 연구원에게 전달하여 방법을 잘 고안해주세요."
+
+### 문제 진단
+현재 스캐너 (live_pump_scanner + Type C medium):
+- Type A burst: 단봉 gain≥3% + vol≥20x → **이미 폭발 후**에야 감지
+- Type C medium: 10분 누적 +7% → **이미 상당히 오른 후** 감지
+- **조용한 증강(quiet gradual)**: 30분~2시간에 걸쳐 1~2%씩 계단 상승 → **완전 미감지**
+
+### 실제 사례 (오늘 4/10)
+| 코인 | 패턴 | 초기 진입 가능 시점 | 실제 진입 | 놓친 이유 |
+|---|---|---|---|---|
+| CFG | 4h 계단 266→410 | 10:30 (290, +8%) | 11:30 (329, +20%) | 스캐너 미탐지 |
+| MERL | 45min 계단 35.8→38.9 | 11:15 (36.2, +1%) | 12:01 (36.69, +3%) | 수동 차트 판독 |
+| MON | 2h V자+계단 50→54 | 13:05 (51.5, +3%) | 14:00 (53.94, +8%) | 뒤늦은 발견 |
+
+→ **공통점**: 단봉 gain <3%, vol 폭발 없음, 꾸준한 소폭 상승 → 스캐너 못 잡음
+
+### 연구원에게 요청 — "Quiet Gradual Scanner" 설계
+
+**감지 기준 제안 (워커)**:
+```python
+def check_quiet_gradual(candles_60):
+    """조용한 증강 감지.
+    30분~60분 동안 꾸준히 우상향하는 계단식 패턴.
+    burst 아닌 vol steady increase.
+    """
+    # 1. MA 정배열 (MA5 > MA15 > MA60, 각 기울기 양)
+    ma5 = mean(close[-5:])
+    ma15 = mean(close[-15:])
+    ma60 = mean(close[-60:])
+    if not (ma5 > ma15 > ma60): return None
+    
+    # 2. 30분 R² > 0.7 (깨끗한 우상향 선형 추세)
+    r2 = linear_regression_r2(close[-30:])
+    if r2 < 0.7: return None
+    
+    # 3. vol steady (평균 대비 1.5~3x, burst 아닌)
+    vol_ratio = mean(vol[-10:]) / mean(vol[-60:-10])
+    if vol_ratio < 1.5 or vol_ratio > 10: return None  # 1.5~10x
+    
+    # 4. 30분 누적 gain 3~15% (초기~중반)
+    gain_30m = (close[-1] - close[-30]) / close[-30] * 100
+    if gain_30m < 3 or gain_30m > 15: return None
+    
+    return {'mode': 'quiet_gradual', 'r2': r2, 'gain_30m': gain_30m, ...}
+```
+
+**대안/보완**:
+1. **워커 차트 시각 판독 5분 주기 자동화**: top 10 24h movers chart_snapshot → 시각 판독
+2. **dual_scanner에 Type D "quiet gradual" 추가**
+3. **R² gradient score** (feedback_chart_patterns.md 기존 룰 활용)
+
+**연구원 의견 요청**:
+1. R² 기반 탐지 유효한가? 빗썸 1분봉 noise 수준에서?
+2. MA 정배열 vs R² vs 다른 지표?
+3. vol steady increase 정확한 threshold?
+4. 5분 주기 자동 차트 판독이 현실적인가? (API 부하, 컨텍스트 소모)
+
+### 추가 보고
+- EDGE SL 195 발동 (14:40, -4.43%)
+- NOM/GOAT = **상폐 예정**, 자정까지 특별감시 (BLY +2600% 사례)
+- 현재 MON 86K + MERL 100K + KRW 659K = 845K
+
+---
+
 ## 2026-04-10 13:32 (worker: claude-opus-4-6) 종합 업데이트 — Q-28/29/30 수용 + PCI ALLIN
 
 ### 현재 포지션
