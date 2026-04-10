@@ -37,7 +37,7 @@ def scan_quick():
 
 def get_account():
     try:
-        result = subprocess.run(['python', 'check_account.py'], capture_output=True, text=True, timeout=10, encoding='utf-8', errors='replace')
+        result = subprocess.run(['python', 'check_account.py'], capture_output=True, timeout=10, encoding='utf-8', errors='replace')
         return result.stdout.strip()
     except Exception:
         return 'account check failed'
