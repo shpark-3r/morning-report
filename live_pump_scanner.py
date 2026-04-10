@@ -95,7 +95,8 @@ def check_burst_signal(candles, strong=False):
         return None
 
     gain = (c - o) / o * 100
-    if gain < 5:
+    min_gain = 5 if strong else 3  # Q-30: 5%→3% (점진 가속 JOE/ENJ/PCI 단봉 +3~4% 포착)
+    if gain < min_gain:
         return None
 
     tv = c * v
@@ -118,6 +119,50 @@ def check_burst_signal(candles, strong=False):
         'gain': gain,
         'tv': tv,
         'mode': 'burst_strong' if strong else 'burst',
+    }
+
+
+def check_medium_signal(candles):
+    """Q-30: Medium speed signal (10분 누적 가속).
+    PCI/JOE 같은 점진 가속형: 단봉 +5% 안 넘지만 10분 +7%.
+    조건:
+      - 최근 10봉 누적 gain >= 7%
+      - 최근 10봉 평균 vol >= baseline_30 * 3x
+      - 최근 10봉 양봉 비율 >= 70%
+      - tv_10min >= 100M
+    """
+    if len(candles) < 42:
+        return None
+    i = len(candles) - 1
+    start_close = candles[i - 10][2]
+    end_close = candles[i][2]
+    if start_close <= 0 or end_close <= 0:
+        return None
+    cum_gain = (end_close - start_close) / start_close * 100
+    if cum_gain < 7:
+        return None
+    vol_10 = sum(candles[j][5] for j in range(i - 10, i)) / 10
+    base_vol = sum(candles[j][5] for j in range(i - 40, i - 10)) / 30
+    if base_vol <= 0:
+        return None
+    vol_ratio = vol_10 / base_vol
+    if vol_ratio < 3:
+        return None
+    up_count = sum(1 for j in range(i - 10, i) if candles[j][2] > candles[j][1])
+    up_ratio = up_count / 10
+    if up_ratio < 0.7:
+        return None
+    tv_10 = sum(candles[j][2] * candles[j][5] for j in range(i - 10, i))
+    if tv_10 < 100e6:
+        return None
+    return {
+        'ts': candles[i][0],
+        'price': end_close,
+        'vol_ratio': vol_ratio,
+        'cum_gain': cum_gain,
+        'up_ratio': up_ratio,
+        'tv_10min': tv_10,
+        'mode': 'medium',
     }
 
 
@@ -243,6 +288,9 @@ def scan(strict=False, fp_filter=False, burst=False, strong=False):
             continue
         if burst:
             sig = check_burst_signal(candles, strong=strong)
+            # Q-30: burst 못 잡으면 medium speed도 체크 (PCI 같은 점진 가속)
+            if sig is None:
+                sig = check_medium_signal(candles)
         else:
             sig = check_signal(candles, strict=strict, fp_filter=fp_filter)
         if sig:
@@ -253,14 +301,21 @@ def scan(strict=False, fp_filter=False, burst=False, strong=False):
     if signals:
         # burst 우선
         if burst:
-            signals.sort(key=lambda s: -s.get('vol_x', 0))
+            signals.sort(key=lambda s: (-s.get('vol_x', 0), -s.get('cum_gain', 0)))
             for s in signals:
                 dt = datetime.fromtimestamp(s['ts'] / 1000, KST)
-                marker = '*** STRONG ***' if s.get('mode') == 'burst_strong' else ''
                 chart_url = f'https://www.bithumb.com/react/trade/order/{s["coin"]}_KRW'
-                print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
-                      f'vol_x={s["vol_x"]:>6.0f}x gain={s["gain"]:>+5.1f}% '
-                      f'tv={s["tv"]/1e6:>4.0f}M price={s["price"]} {marker}')
+                if s.get('mode') == 'medium':
+                    # Q-30 Type C medium speed
+                    print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
+                          f'10m_gain={s["cum_gain"]:>+5.1f}% vol_r={s["vol_ratio"]:>5.1f}x '
+                          f'up={s["up_ratio"]:.0%} tv10={s["tv_10min"]/1e6:>4.0f}M '
+                          f'price={s["price"]} *** MEDIUM ***')
+                else:
+                    marker = '*** STRONG ***' if s.get('mode') == 'burst_strong' else ''
+                    print(f'  [{dt:%H:%M}] {s["coin"]:>10} '
+                          f'vol_x={s["vol_x"]:>6.0f}x gain={s["gain"]:>+5.1f}% '
+                          f'tv={s["tv"]/1e6:>4.0f}M price={s["price"]} {marker}')
                 print(f'             → {chart_url}')
         else:
             signals.sort(key=lambda s: (-s.get('very_strict', 0), -s.get('tv_5min', 0)))
