@@ -75,24 +75,27 @@ def main():
 
         s.sendall(json.dumps(msg, ensure_ascii=False).encode('utf-8'))
 
-        # 워커 응답 수신
-        time.sleep(2)
-        try:
-            data = s.recv(65536)
-            if data:
-                replies = data.decode('utf-8').strip().split('\n')
-                for reply in replies:
-                    try:
-                        r = json.loads(reply)
-                        if r.get('type') != 'ack':
-                            print(f'[{now:%H:%M:%S}] WORKER: {json.dumps(r, ensure_ascii=False)[:150]}')
-                            # 워커 메시지 파일로 저장
-                            with open('bridge_inbox.jsonl', 'a', encoding='utf-8') as f:
-                                f.write(json.dumps(r, ensure_ascii=False) + '\n')
-                    except json.JSONDecodeError:
-                        pass
-        except socket.timeout:
-            pass
+        # 워커 응답 수신 (최대 5초 폴링)
+        s.settimeout(1)
+        end_time = time.time() + 5
+        while time.time() < end_time:
+            try:
+                data = s.recv(65536)
+                if data:
+                    replies = data.decode('utf-8').strip().split('\n')
+                    for reply in replies:
+                        try:
+                            r = json.loads(reply)
+                            if r.get('type') != 'ack':
+                                print(f'[{now:%H:%M:%S}] WORKER: {json.dumps(r, ensure_ascii=False)[:150]}')
+                                with open('bridge_inbox.jsonl', 'a', encoding='utf-8') as f:
+                                    f.write(json.dumps(r, ensure_ascii=False) + '\n')
+                        except json.JSONDecodeError:
+                            pass
+            except socket.timeout:
+                continue
+            except Exception:
+                break
 
         s.close()
 
