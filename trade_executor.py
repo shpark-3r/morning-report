@@ -103,6 +103,43 @@ def buy_market(coin, krw_amount):
         return {'error': str(e)}
 
 
+def buy_limit(coin, price, volume):
+    """지정가 매수.
+
+    Args:
+        coin: 코인 심볼 (예: 'NOM')
+        price: 매수 희망가
+        volume: 매수 수량
+    Returns: order result dict
+    """
+    params = {
+        'market': f'KRW-{coin}',
+        'side': 'bid',
+        'ord_type': 'limit',
+        'price': str(price),
+        'volume': str(volume),
+    }
+    try:
+        result = _post('/orders', params)
+        return result
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def cancel_order(uuid_str):
+    """주문 취소."""
+    try:
+        access_key, secret_key = _load_keys()
+        params = {'uuid': uuid_str}
+        headers = _auth_header(access_key, secret_key, params)
+        url = f'{BASE_URL}/order?{urlencode(params)}'
+        req = urllib.request.Request(url, headers=headers, method='DELETE')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+
 def sell_market(coin, qty):
     """시장가 매도. qty만큼 매도.
 
@@ -130,8 +167,59 @@ def get_order_status(uuid_str):
         return {'error': str(e)}
 
 
+def smart_buy(coin, krw_amount, timeout_sec=60):
+    """지정가 매수 시도 -> 미체결 시 시장가 전환.
+
+    1. 현재가로 지정가 매수
+    2. timeout_sec 대기
+    3. 미체결이면 취소 후 시장가 매수
+    """
+    import urllib.request as ur
+    # 현재가 조회
+    url = f'https://api.bithumb.com/v1/ticker?markets=KRW-{coin}'
+    req = ur.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with ur.urlopen(req, timeout=5) as r:
+        ticker = json.loads(r.read())
+    current_price = ticker[0]['trade_price']
+
+    # 수량 계산
+    volume = krw_amount / current_price
+    volume_str = f'{volume:.8f}'
+
+    # 지정가 매수
+    result = buy_limit(coin, current_price, volume_str)
+    if 'error' in result:
+        return buy_market(coin, krw_amount)  # 실패 시 시장가
+
+    order_uuid = result.get('uuid')
+    if not order_uuid:
+        return buy_market(coin, krw_amount)
+
+    # 대기
+    waited = 0
+    while waited < timeout_sec:
+        time.sleep(5)
+        waited += 5
+        status = get_order_status(order_uuid)
+        if status.get('state') == 'done':
+            return status  # 체결 완료
+        if status.get('state') == 'cancel':
+            return buy_market(coin, krw_amount)  # 취소됨
+
+    # 타임아웃 - 미체결분 취소 후 시장가
+    status = get_order_status(order_uuid)
+    if status.get('state') != 'done':
+        cancel_order(order_uuid)
+        time.sleep(1)
+        remaining = float(status.get('remaining_volume', 0))
+        if remaining > 0:
+            remaining_krw = remaining * current_price
+            if remaining_krw >= 5000:
+                return buy_market(coin, int(remaining_krw))
+    return status
+
+
 if __name__ == '__main__':
-    # 테스트: 잔고 확인만
     krw, pos = get_balance()
     print(f'KRW: {krw:,.0f}')
     for p in pos:
