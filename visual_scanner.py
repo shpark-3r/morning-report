@@ -1,5 +1,5 @@
 """
-Visual Scanner — 1단계 거름망 + 2단계 차트 렌더링.
+Visual Scanner - 1단계 거름망 + 2단계 차트 렌더링.
 
 1단계: 451코인 빠른 스캔 (거래량/가격 변동 기준)
 2단계: 후보 코인만 차트 렌더링 → Claude가 직접 이미지 분석
@@ -63,7 +63,7 @@ def load_coins():
 
 
 def quick_filter(coins):
-    """1단계: 빠른 거름망 — 움직이는 코인만 추출.
+    """1단계: 빠른 거름망 - 움직이는 코인만 추출.
 
     조건 (하나라도 충족):
     - 최근 10분 가격 변동 >=2%
@@ -127,9 +127,13 @@ def quick_filter(coins):
 
         consec_pos = max(pos5, pos10)  # 호환용
 
-        hit5 = (pos5 >= 4 and chg5 >= 0.5 and tv_10m >= 3_000_000)
-        hit10 = (pos10 >= 6 and chg10 >= 1.0 and tv_10m >= 3_000_000)
+        # 단봉 최대 상승률 (폭발형 배제용)
+        max_single_bar = max((c[2]-c[1])/c[1]*100 if c[1]>0 else 0 for c in last10)
+
+        hit5 = (pos5 >= 4 and chg5 >= 0.5 and tv_10m >= 3_000_000 and max_single_bar < 8)
+        hit10 = (pos10 >= 6 and chg10 >= 1.0 and tv_10m >= 3_000_000 and max_single_bar < 8)
         is_staircase = hit5 or hit10
+        # vol_ratio 필터 제거 — 대장 85% 놓침 확인. 차트분석이 FP 필터링 담당.
 
         hit = False
         reason = []
@@ -141,11 +145,11 @@ def quick_filter(coins):
             if hit5: tags.append(f'5m:{pos5}/5 {chg5:+.1f}%')
             if hit10: tags.append(f'10m:{pos10}/10 {chg10:+.1f}%')
             reason.append(f'STAIR {" ".join(tags)}')
-            priority = 0  # 최우선 — 계단식 상승 초기
+            priority = 0  # 최우선 - 계단식 상승 초기
         if is_accumulation:
             hit = True
             reason.append(f'ACCUM vol {vol_ratio:.0f}x price flat')
-            priority = 0  # 최우선 — 아직 안 올랐으니 진입 가능
+            priority = 0  # 최우선 - 아직 안 올랐으니 진입 가능
         if chg_10m >= 2:
             hit = True
             reason.append(f'10m {chg_10m:+.1f}%')
@@ -183,7 +187,7 @@ def quick_filter(coins):
 
 
 def render_scan_chart(coin, minutes=60):
-    """후보 코인 차트 렌더링 — scan_charts/ 폴더에 저장."""
+    """후보 코인 차트 렌더링 - scan_charts/ 폴더에 저장."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -295,7 +299,7 @@ def scan_and_render(max_charts=20, minutes=60):
     others = [c for c in candidates if not c.get('accumulation')]
 
     if accum:
-        print(f'\n  *** ACCUMULATION DETECTED ({len(accum)}) — price flat + volume surge ***')
+        print(f'\n  *** ACCUMULATION DETECTED ({len(accum)}) - price flat + volume surge ***')
         for c in accum:
             print(f'  >>> {c["coin"]:>10}  {c["price"]:>12,.0f}  {c["reason"]:<35}  '
                   f'tv10={c["tv_10m"]/1e6:>5.0f}M  fromHigh={c["from_high"]:+.1f}%')
