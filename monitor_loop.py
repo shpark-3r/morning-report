@@ -30,11 +30,32 @@ def run_once():
 
     # STAIR - top priority
     if stairs:
-        lines.append(f'*** STAIRCASE ({len(stairs)}) - consecutive green bars ***')
+        lines.append(f'*** STAIRCASE ({len(stairs)}) - gradual increase ***')
         for c in stairs:
+            # 매수/매도 비율 체크
+            buy_pct = 0
+            try:
+                import urllib.request
+                tx_url = f'https://api.bithumb.com/public/transaction_history/{c["coin"]}_KRW?count=30'
+                tx_req = urllib.request.Request(tx_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(tx_req, timeout=3) as tx_r:
+                    tx_d = json.loads(tx_r.read())
+                if tx_d.get('status') == '0000':
+                    txs = tx_d['data']
+                    buy = sum(float(t['price'])*float(t['units_traded']) for t in txs if t['type']=='bid')
+                    sell = sum(float(t['price'])*float(t['units_traded']) for t in txs if t['type']=='ask')
+                    total_tx = buy + sell
+                    buy_pct = buy/total_tx*100 if total_tx > 0 else 50
+            except Exception:
+                buy_pct = -1  # check failed
+
+            bias = 'BUY' if buy_pct > 60 else ('SELL' if buy_pct < 40 else 'NEUTRAL')
+            if buy_pct < 0: bias = '?'
+
             lines.append(f'  >>> {c["coin"]:>10} @{c["price"]:>12,.0f}  '
                          f'{c["consec_pos"]}bars  vol={c["vol_ratio"]:.0f}x  tv10={c["tv_10m"]/1e6:.0f}M  '
-                         f'chg10={c["chg_10m"]:+.1f}%  fH={c["from_high"]:+.1f}%')
+                         f'chg10={c["chg_10m"]:+.1f}%  fH={c["from_high"]:+.1f}%  '
+                         f'buy={buy_pct:.0f}% [{bias}]')
             chart = render_scan_chart(c['coin'], 120)
             if chart:
                 lines.append(f'       CHART: {chart}')
@@ -43,6 +64,7 @@ def run_once():
                     'ts': now.isoformat(), 'type': 'STAIR',
                     'coin': c['coin'], 'price': c['price'],
                     'consec_pos': c['consec_pos'], 'tv_10m': c['tv_10m'],
+                    'buy_pct': buy_pct, 'bias': bias,
                 }, ensure_ascii=False) + '\n')
 
     # 매집 신호
