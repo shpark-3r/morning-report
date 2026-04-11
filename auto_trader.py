@@ -113,10 +113,37 @@ def main():
             # 스캔
             stairs, accum = scan_once()
 
+            # 포지션 현재 수익률 계산
+            pos_pnl = None
+            pos_coin = None
+            if positions:
+                p = positions[0]
+                pos_coin = p['coin']
+                try:
+                    ticker_url = f'https://api.bithumb.com/v1/ticker?markets=KRW-{pos_coin}'
+                    req = urllib.request.Request(ticker_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        ticker = json.loads(r.read())
+                    current = ticker[0]['trade_price']
+                    pos_pnl = (current - p['avg_buy']) / p['avg_buy'] * 100
+                except Exception:
+                    pos_pnl = None
+
+            # 갈아타기 판단
+            switch_signal = None
+            if positions and pos_pnl is not None and pos_pnl < -1 and stairs:
+                # 현 포지션이 마이너스이고 새 STAIR가 있으면 갈아타기 후보
+                switch_signal = stairs[0]  # 가장 우선순위 높은 것
+
             # 상태 작성
             lines = [f'[{now:%H:%M:%S}] KRW={krw:,.0f} pos={len(positions)}']
             for p in positions:
-                lines.append(f'  {p["coin"]} qty={p["qty"]:.2f} avg={p["avg_buy"]:.2f}')
+                pnl_str = f' pnl={pos_pnl:+.1f}%' if pos_pnl is not None else ''
+                lines.append(f'  {p["coin"]} qty={p["qty"]:.2f} avg={p["avg_buy"]:.2f}{pnl_str}')
+
+            if switch_signal:
+                lines.append(f'*** SWITCH CANDIDATE - current pos {pos_pnl:+.1f}% ***')
+                lines.append(f'  -> {format_stair(switch_signal)}')
 
             if stairs:
                 lines.append(f'*** STAIR DETECTED ({len(stairs)}) ***')
