@@ -1,5 +1,5 @@
 """
-1분 루프 모니터링 — 매집 감지 + 차트 렌더링.
+1min loop monitoring - accumulation + chart rendering.
 Claude가 output 파일을 읽고 차트를 직접 분석.
 
 출력: monitor_output.txt (상태), scan_charts/ (차트 이미지)
@@ -28,7 +28,7 @@ def run_once():
     lines = []
     lines.append(f'[{now:%H:%M:%S}] scan={len(coins)} candidates={len(candidates)} stair={len(stairs)} accum={len(accum)}')
 
-    # 계단식 양봉 — 최우선 (초기 진입 신호)
+    # STAIR - top priority
     if stairs:
         lines.append(f'*** STAIRCASE ({len(stairs)}) - consecutive green bars ***')
         for c in stairs:
@@ -65,7 +65,7 @@ def run_once():
                     'vol_ratio': c['vol_ratio'], 'tv_10m': c['tv_10m'],
                 }, ensure_ascii=False) + '\n')
 
-    # 상위 무버 (가격 변동 있는 것) — 상위 5개
+    # Top movers - top 5
     top_movers = sorted(movers, key=lambda x: -x['vol_ratio'])[:5]
     if top_movers:
         lines.append(f'Top movers ({len(movers)} total):')

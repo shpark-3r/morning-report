@@ -114,24 +114,22 @@ def quick_filter(coins):
         # tv_10m >= 30M 필터로 잡코인 제외
         is_accumulation = (chg_10m < 1.5 and vol_ratio >= 8 and tv_10m >= 30_000_000)
 
-        # 점진적 증강 감지: 최근 10봉 중 양봉 비율 + 가격 상승
-        # GWEI 패턴: 연속은 아니지만 10봉 중 7개 양봉 + 전체 상승
+        # 점진적 증강 감지: 5봉 + 10봉 동시 체크
+        # 5봉: 빠른 감지 (GOAT, PARTI)
+        last5 = candles[max(0, i-4):i+1]
+        pos5 = sum(1 for c in last5 if c[2] > c[1])
+        chg5 = (candles[i][2] - candles[max(0,i-4)][2]) / candles[max(0,i-4)][2] * 100 if candles[max(0,i-4)][2] > 0 else 0
+
+        # 10봉: 안정적 감지 (FF, LPT)
         last10 = candles[max(0, i-9):i+1]
-        pos_count = sum(1 for c in last10 if c[2] > c[1])
-        price_chg_10 = (candles[i][2] - candles[max(0,i-9)][2]) / candles[max(0,i-9)][2] * 100 if candles[max(0,i-9)][2] > 0 else 0
-        consec_pos = pos_count  # 호환용
+        pos10 = sum(1 for c in last10 if c[2] > c[1])
+        chg10 = (candles[i][2] - candles[max(0,i-9)][2]) / candles[max(0,i-9)][2] * 100 if candles[max(0,i-9)][2] > 0 else 0
 
-        # 양봉 3연속도 별도 체크 (FF 폭발형)
-        consec_run = 0
-        for j in range(i, max(i - 10, -1), -1):
-            if candles[j][2] > candles[j][1]:
-                consec_run += 1
-            else:
-                break
+        consec_pos = max(pos5, pos10)  # 호환용
 
-        # 점진적 증강 (통일): 10봉 중 6개+ 양봉 AND 가격 +1% 이상
-        # FF, GWEI, LPT, STRK 전부 같은 패턴 — 속도만 다름
-        is_staircase = (pos_count >= 6 and price_chg_10 >= 1.0 and tv_10m >= 3_000_000)
+        hit5 = (pos5 >= 4 and chg5 >= 0.5 and tv_10m >= 3_000_000)
+        hit10 = (pos10 >= 6 and chg10 >= 1.0 and tv_10m >= 3_000_000)
+        is_staircase = hit5 or hit10
 
         hit = False
         reason = []
@@ -139,7 +137,10 @@ def quick_filter(coins):
 
         if is_staircase:
             hit = True
-            reason.append(f'STAIR {consec_pos}bars')
+            tags = []
+            if hit5: tags.append(f'5m:{pos5}/5 {chg5:+.1f}%')
+            if hit10: tags.append(f'10m:{pos10}/10 {chg10:+.1f}%')
+            reason.append(f'STAIR {" ".join(tags)}')
             priority = 0  # 최우선 — 계단식 상승 초기
         if is_accumulation:
             hit = True
