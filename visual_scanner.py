@@ -114,15 +114,15 @@ def quick_filter(coins):
         # tv_10m >= 30M 필터로 잡코인 제외
         is_accumulation = (chg_10m < 1.5 and vol_ratio >= 8 and tv_10m >= 30_000_000)
 
-        # 양봉 5연속 감지: 계단식 점진 상승의 핵심 신호
-        # 기울기 무관 — 양봉 5개 연속이면 잡음
+        # 양봉 3연속 감지: 계단식 점진 상승 초기 신호
+        # 기울기 무관 — 양봉 3개 연속이면 잡음. FF 03:01~03:03 패턴.
         consec_pos = 0
         for j in range(i, max(i - 10, -1), -1):
             if candles[j][2] > candles[j][1]:  # close > open = 양봉
                 consec_pos += 1
             else:
                 break
-        is_staircase = (consec_pos >= 5 and tv_10m >= 3_000_000)
+        is_staircase = (consec_pos >= 3 and tv_10m >= 3_000_000)
 
         hit = False
         reason = []

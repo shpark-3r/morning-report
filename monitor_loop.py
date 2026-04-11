@@ -30,7 +30,7 @@ def run_once():
 
     # 계단식 양봉 — 최우선 (초기 진입 신호)
     if stairs:
-        lines.append(f'*** STAIRCASE ({len(stairs)}) — consecutive green bars ***')
+        lines.append(f'*** STAIRCASE ({len(stairs)}) - consecutive green bars ***')
         for c in stairs:
             lines.append(f'  >>> {c["coin"]:>10} @{c["price"]:>12,.0f}  '
                          f'{c["consec_pos"]}bars  vol={c["vol_ratio"]:.0f}x  tv10={c["tv_10m"]/1e6:.0f}M  '
