@@ -114,15 +114,24 @@ def quick_filter(coins):
         # tv_10m >= 30M 필터로 잡코인 제외
         is_accumulation = (chg_10m < 1.5 and vol_ratio >= 8 and tv_10m >= 30_000_000)
 
-        # 양봉 3연속 감지: 계단식 점진 상승 초기 신호
-        # 기울기 무관 — 양봉 3개 연속이면 잡음. FF 03:01~03:03 패턴.
-        consec_pos = 0
+        # 점진적 증강 감지: 최근 10봉 중 양봉 비율 + 가격 상승
+        # GWEI 패턴: 연속은 아니지만 10봉 중 7개 양봉 + 전체 상승
+        last10 = candles[max(0, i-9):i+1]
+        pos_count = sum(1 for c in last10 if c[2] > c[1])
+        price_chg_10 = (candles[i][2] - candles[max(0,i-9)][2]) / candles[max(0,i-9)][2] * 100 if candles[max(0,i-9)][2] > 0 else 0
+        consec_pos = pos_count  # 호환용
+
+        # 양봉 3연속도 별도 체크 (FF 폭발형)
+        consec_run = 0
         for j in range(i, max(i - 10, -1), -1):
-            if candles[j][2] > candles[j][1]:  # close > open = 양봉
-                consec_pos += 1
+            if candles[j][2] > candles[j][1]:
+                consec_run += 1
             else:
                 break
-        is_staircase = (consec_pos >= 3 and tv_10m >= 3_000_000)
+
+        # 점진적 증강 (통일): 10봉 중 6개+ 양봉 AND 가격 +1% 이상
+        # FF, GWEI, LPT, STRK 전부 같은 패턴 — 속도만 다름
+        is_staircase = (pos_count >= 6 and price_chg_10 >= 1.0 and tv_10m >= 3_000_000)
 
         hit = False
         reason = []
