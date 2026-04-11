@@ -12,8 +12,10 @@ Claude가 직접 차트를 보고 최종 판단.
 import json
 import time
 import os
+import urllib.request
 from datetime import datetime, timezone, timedelta
-from visual_scanner import load_coins, quick_filter, render_scan_chart
+from visual_scanner import quick_filter, render_scan_chart
+from dual_scanner import fetch_candles, parse
 from trade_executor import get_balance, buy_market, sell_market
 
 KST = timezone(timedelta(hours=9))
@@ -26,9 +28,28 @@ def log_trade(data):
         f.write(json.dumps({**data, 'ts': datetime.now(KST).isoformat()}, ensure_ascii=False) + '\n')
 
 
+def get_active_coins(min_tv24=500_000_000):
+    """ticker ALL로 활발한 코인만 빠르게 추출 (0.15초)."""
+    url = 'https://api.bithumb.com/public/ticker/ALL_KRW'
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read())
+    data = d.get('data', {})
+    active = []
+    for coin, info in data.items():
+        if coin == 'date': continue
+        try:
+            price = float(info.get('closing_price', 0))
+            vol = float(info.get('units_traded_24H', 0))
+            if price * vol >= min_tv24 and price >= 10:
+                active.append(coin)
+        except: pass
+    return active
+
+
 def scan_once():
-    """1회 스캔 -> STAIR/ACCUM 후보 반환."""
-    coins = load_coins()
+    """1회 스캔 -> STAIR/ACCUM 후보 반환. ticker로 1차필터 후 캔들 스캔."""
+    coins = get_active_coins()
     candidates = quick_filter(coins)
 
     stairs = [c for c in candidates if c.get('staircase')]

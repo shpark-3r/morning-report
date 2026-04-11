@@ -1,0 +1,33 @@
+{
+  "updated": "2026-04-11T23:37:00+09:00",
+  "positions": [
+    {
+      "coin": "NOM",
+      "qty": 32034.78,
+      "entry": 20.67,
+      "sl": 19.64,
+      "sl_pct": -5.0,
+      "reason": "delisting pump expectation",
+      "status": "holding"
+    }
+  ],
+  "krw_available": 2560,
+  "total_krw": 676000,
+  "strategy": {
+    "mode": "STAIR detection + chart analysis",
+    "filters": {
+      "stair_5bar": "4/5 positive bars + 0.5% gain",
+      "stair_10bar": "6/10 positive bars + 1.0% gain",
+      "vol_ratio_min": 15,
+      "price_min": 10,
+      "max_single_bar": 5.0,
+      "buy_pct_check": true
+    },
+    "sl": -5.0,
+    "trail": "-10% from high after +15%",
+    "champion_hold": "chart judgment - no mechanical trail"
+  },
+  "session_notes": "API tested: buy/sell/cancel all working. Fee 0.04%, spread ~0.67%.",
+  "deadline": "2026-04-20, need +680K (total 1.43M)",
+  "auto_trader": "auto_trader.py - scans every 60s, writes auto_trader_status.txt"
+}
